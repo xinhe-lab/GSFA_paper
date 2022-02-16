@@ -1,5 +1,5 @@
 ---
-title: "GSFA Results of LUHMES CROP-seq Data"
+title: "GSFA Results of CD8+ T Cell CROP-seq Data"
 subtitle: "-- for manuscript"
 author: "Yifan Zhou (zhouyf@uchicago.edu)"
 date: '`r format(Sys.time(), "%Y-%m")`'
@@ -44,15 +44,16 @@ pander::panderOptions("table.split.table", Inf)
 ```
 
 ```{r}
-source("/project2/xinhe/yifan/Factor_analysis/paper/plotting_functions.R")
-data_folder <- "/project2/xinhe/yifan/Factor_analysis/paper/LUHMES/data/"
+source("/project2/xinhe/yifan/Factor_analysis/paper/R/plotting_functions.R")
+data_folder <- "/project2/xinhe/yifan/Factor_analysis/paper/data/TCells/"
 
 G_mat <- readRDS(paste0(data_folder, "perturbation_matrix.rds"))
 gibbs_PM <- readRDS(paste0(data_folder, "gsfa_posterior_means.rds"))
-lfsr_mat <- readRDS(paste0(data_folder, "lfsr_matrix.rds"))
+lfsr_mat1 <- readRDS(paste0(data_folder, "lfsr_matrix_stimulated.rds"))
+lfsr_mat0 <- readRDS(paste0(data_folder, "lfsr_matrix_unstimulated.rds"))
 genes_df <- readRDS(paste0(data_folder, "top6k_genes.rds"))
-interest_df <- readRDS(paste0(data_folder, "selected_neuronal_markers.rds"))
-KO_names <- colnames(lfsr_mat)
+interest_df <- readRDS(paste0(data_folder, "selected_tcell_markers.rds"))
+KO_names <- colnames(lfsr_mat1)
 ```
 
 # Background
@@ -60,62 +61,81 @@ KO_names <- colnames(lfsr_mat)
 ## Input data and pre-processing
 
 Source:   
-[High-throughput single-cell functional elucidation of neurodevelopmental disease-associated genes reveals convergent mechanisms altering neuronal differentiation](https://genome.cshlp.org/content/30/9/1317.full), GEO accession: GSE142078.
+[Genome-wide CRISPR Screens in Primary Human T Cells Reveal Key Regulators of Immune Function](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6689405/), GEO accession: GSE119450.
 
 Perturbations:    
-CRISPR knock-down of 14 autism spectrum disorder (ASD)–associated genes (3 gRNAs per gene) + 5 non-targeting gRNAs.
+CRISPR knock-out of 20 genes (2 gRNAs per gene) + 8 non-targeting gRNAs. Guide conditions were defined on the target gene level; target genes were either found to regulate T cell responses in the genome-wide screens, or known checkpoint genes.    
+Guide RNAs were introduced into T cells through a novel procedure called sgRNA lentiviral infection with Cas9 protein electroporation (SLICE).
 
 Cells:    
-Lund human mesencephalic (LUHMES) neural progenitor cell line.   
-Cells from 3 batches were merged together into 1 analysis. All cells have only a single type of gRNA readout. Quality control resulted in 8708 cells.
+Primary human CD8+ T cells from two healthy donors, **with and without** T cell receptor (TCR) stimulation.   
+Cells from 2 donors were pooled together into 1 analysis. All cells have only a single type of gRNA readout. Quality control resulted in 24995 cells, including 5533 donor1_unstim, 6843 donor1_stim, 5144 donor2_unstim, and 7435 donor2_stim cells.
 
 Genes:    
 **Top 6000 genes ranked by the multinomial deviance statistics were kept.**
 
 Normalization:    
 Deviance residual transformation.   
-**Batch effect, unique UMI count, library size, and mitochondria percentage were all corrected for. The corrected and scaled expression data were used as input for subsequent GSFA.**
+**Donor batch was not corrected for.**  
+**Unique UMI count, library size, and mitochondria percentage were all corrected for. The corrected and scaled expression data were used as input for subsequent GSFA.**
 
 ## GSFA
 
 Input:    
-In addition to the expression matrix, we have a binary perturbation matrix ($G$) consisting of 15 types (14 genes + negative control) of gene-level knock-down conditions across cells.
+In addition to the expression matrix, we have a binary perturbation matrix ($G$) consisting of 21 types (20 genes + negative control) of gene-level KO conditions across cells.
 
-For Gibbs sampling, we specified 20 factors initialized from truncated SVD. Results were obtained from 3000 iterations, with the posterior mean estimates averaged over the last 1000 iterations.
+For Gibbs sampling, we specified 20 factors initialized from truncated SVD. Results were obtained from 4000 iterations, with the posterior mean estimates averaged over the last 1000 iterations.
 
-# Factor ~ Perturbation Association
+The association of $Z$ with $G$ were estimated separately for stimulated and unstimulated cells, generating two effect size matrices, $\beta_1$ and $\beta_0$, and two $LFSR$ matrices that summarized the effects of perturbations on genes for stimulated and unstimulated cells, respectively.
 
-## Perturbation effects on factors ($\beta$)
+# Factor ~ Perturbation Associations
 
-All targets and factors (Figure S6A):
-```{r Fig_S6A, fig.width=9, fig.height=5.5}
-dotplot_beta_PIP(t(gibbs_PM$Gamma_pm), t(gibbs_PM$beta_pm),
+## Perturbation effects on factors ($\beta$) (stimulated cells)
+
+All targets and factors (Figure S4A):
+
+```{r Fig_S4A, fig.width=9, fig.height=6.5}
+dotplot_beta_PIP(t(gibbs_PM$Gamma1_pm), t(gibbs_PM$beta1_pm),
                  marker_names = KO_names,
-                 reorder_markers = c(KO_names[KO_names!="Nontargeting"], "Nontargeting"),
+                 reorder_markers = c(KO_names[KO_names!="NonTarget"], "NonTarget"),
                  inverse_factors = F) +
   coord_flip()
 ```
 
-Effects of selected perturbations on factors (Figure 5A):
-
-```{r Fig_5A, fig.width=4, fig.height=4}
-reorder_KO <- c("ADNP", "ARID1B", "ASH1L", "CHD2", "DYRK1A", "PTEN", "SETD5")
-complexplot_perturbation_factor(gibbs_PM$Gamma_pm[-nrow(gibbs_PM$Gamma_pm), ],
-                                gibbs_PM$beta_pm[-nrow(gibbs_PM$beta_pm), ],
-                                marker_names = KO_names,
-                                reorder_markers = reorder_KO,
-                                reorder_factors = c(4, 9, 16))
+Effects of selected perturbations on factors (Figure 3A):
+```{r Fig_3A, fig.width=4.5, fig.height=4}
+targets <- c("ARID1A", "LCP2", "CD5", "CBLB", "RASA2", "DGKA", "TCEB2", "SOCS1", "CDKN1B")
+complexplot_perturbation_factor(gibbs_PM$Gamma1_pm[-nrow(gibbs_PM$Gamma1_pm), ],
+                                gibbs_PM$beta1_pm[-nrow(gibbs_PM$beta1_pm), ],
+                                marker_names = KO_names, reorder_markers = targets,
+                                reorder_factors = c(2, 4, 9, 12))
 ```
 
-## Factor-perturbation association p values
+## Factor-perturbation association p values (stimulated cells)
 ```{r fig.width=10, fig.height=5}
-gibbs_res_tb <- make_gibbs_res_tb(gibbs_PM, G_mat, compute_pve = F)
+stim_cells <-
+  (1:nrow(G_mat))[startsWith(rownames(G_mat), "D1S") | 
+                    startsWith(rownames(G_mat), "D2S")]
+gibbs_res_tb <- make_gibbs_res_tb(gibbs_PM, G_mat, compute_pve = F,
+                                  cell_indx = stim_cells)
 heatmap_matrix <- gibbs_res_tb %>% select(starts_with("pval"))
 rownames(heatmap_matrix) <- 1:nrow(heatmap_matrix)
 colnames(heatmap_matrix) <- colnames(G_mat)
 
 summ_pvalues(unlist(heatmap_matrix),
-             title_text = "GSFA\n(15 Targets x 20 Factors)")
+             title_text = "GSFA Stimulated\n(21 Targets x 20 Factors)")
+```
+
+## Perturbation effects on factors ($\beta$) (unstimulated cells)
+
+All targets and factors (Figure S4B):
+
+```{r Fig_S4B, fig.width=9, fig.height=6.5}
+dotplot_beta_PIP(t(gibbs_PM$Gamma0_pm), t(gibbs_PM$beta0_pm),
+                 marker_names = KO_names,
+                 reorder_markers = c(KO_names[KO_names!="NonTarget"], "NonTarget"),
+                 inverse_factors = F) +
+  coord_flip()
 ```
 
 # Factor Interpretation
@@ -138,7 +158,7 @@ plot_pairwise.corr_heatmap(input_mat_1 = (gibbs_PM$F_pm > 0.95) * 1,
 
 ## Gene loading in factors
 
-Neuronal differentiation markers:
+T cell markers:
 
 ```{r}
 interest_df <- interest_df[interest_df$gene_name %in% genes_df$Name, ]
@@ -147,17 +167,17 @@ knitr::kable(interest_df) %>%
     kable_styling() %>% scroll_box(width = '100%', height = '400px')
 ```
 
-All factors (Figure S6B):
+All factors (Figure S4C):
 
-```{r Fig_S6B, fig.width=10, fig.height=5}
+```{r Fig_S4C, fig.width=8.5, fig.height=4}
 complexplot_gene_factor(genes_df, interest_df, gibbs_PM$F_pm, gibbs_PM$W_pm)
 ```
 
-Selected factors (Figure 5C):
+Selected factors (Figure 3C):
 
-```{r Fig_5C, fig.width=6.5, fig.height=5}
+```{r Fig_3C, fig.width=5.5, fig.height=4}
 complexplot_gene_factor(genes_df, interest_df, gibbs_PM$F_pm, gibbs_PM$W_pm,
-                        reorder_factors = c(4, 9, 16))
+                        reorder_factors = c(2, 4, 9, 12))
 ```
 
 ## GO enrichment analysis in factors
@@ -188,96 +208,105 @@ for (i in 1:ncol(PIP_mat)){
 enrich_res_by_factor <- readRDS(paste0(data_folder, "GO_enrich_in_GSFA_factors.rds"))
 ```
 
-Figure 5D:
+Figure 3D:
 
-```{r Fig_5D_factor4, fig.height=2.4, fig.width=7}
-factor_indx <- 4
-terms_of_interest <- c("regulation of ion transmembrane transport",
-                       "regulation of trans-synaptic signaling",
-                       "axon development",
-                       "regulation of neuron projection development")
+```{r Fig_3D_factor2, fig.height=2.2, fig.width=7}
+factor_indx <- 2
+terms_of_interest <- c("kinetochore organization", "chromosome segregation",
+                       "cell cycle G2/M phase transition", "cytokinesis")
 barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
                          terms_of_interest = terms_of_interest,
-                         str_wrap_length = 35, pval_max = 8, FC_max = 6) +
+                         str_wrap_length = 50) +
   labs(title = paste0("Factor ", factor_indx))
 ```
 
-```{r Fig_5D_factor9, fig.height=2.4, fig.width=7}
+```{r Fig_3D_factor9, fig.height=2.4, fig.width=7}
 factor_indx <- 9
-terms_of_interest <- c("actin filament organization",
-                       "cell fate commitment",
-                       "regulation of neuron projection development",
-                       "regulation of cell morphogenesis")
+terms_of_interest <- c("microtubule cytoskeleton organization involved in mitosis",
+                       "chromosome segregation", "cytokinesis", "cell cycle checkpoint")
 barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
                          terms_of_interest = terms_of_interest,
-                         str_wrap_length = 35, pval_max = 8, FC_max = 6) +
+                         str_wrap_length = 35) +
   labs(title = paste0("Factor ", factor_indx))
 ```
 
-```{r Fig_5D_factor16, fig.height=1.8, fig.width=7}
-factor_indx <- 16
-terms_of_interest <- c("developmental growth involved in morphogenesis",
-                       "axon development")
+```{r Fig_3D_factor4, fig.height=2.6, fig.width=7}
+factor_indx <- 4
+terms_of_interest <- c("response to chemokine", "cell killing", "leukocyte migration",
+                       "response to interferon-gamma", "cytokine secretion")
 barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
-                         terms_of_interest = terms_of_interest, 
-                         str_wrap_length = 35, pval_max = 8, FC_max = 6) +
+                         terms_of_interest = terms_of_interest,
+                         str_wrap_length = 35) +
+  labs(title = paste0("Factor ", factor_indx))
+```
+
+```{r Fig_3D_factor12, fig.height=2.6, fig.width=7}
+factor_indx <- 12
+terms_of_interest <- c("leukocyte cell-cell adhesion", "extrinsic apoptotic signaling pathway",
+                       "cell killing", "T cell activation", "NIK/NF-kappaB signaling")
+barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
+                         terms_of_interest = terms_of_interest,
+                         str_wrap_length = 35) +
   labs(title = paste0("Factor ", factor_indx))
 ```
 
 # DEG Interpretation
 
+**Here, we compared the DEG results within stimulated cells.**
+
 ## Number of DEGs detected by different methods
 
-```{r}
+```{r lfsr}
 fdr_cutoff <- 0.05
 lfsr_cutoff <- 0.05
-lfsr_signif_num <- colSums(lfsr_mat < lfsr_cutoff)
+lfsr_signif_num <- colSums(lfsr_mat1 < lfsr_cutoff)
 signif_num_tb <- t(data.frame(KO = names(lfsr_signif_num),
                            Num_genes = lfsr_signif_num,
                            row.names = NULL))
-knitr::kable(rbind(signif_num_tb[, 1:5], signif_num_tb[, 6:10], signif_num_tb[, 11:15]),
+knitr::kable(rbind(signif_num_tb[, 1:7], signif_num_tb[, 8:14],
+                   signif_num_tb[, 15:21]),
              caption = "Number of DEGs detected by GSFA:") %>%
   kable_styling() %>% scroll_box(width = '100%')
 ```
 
 ```{r deseq}
-deseq_list <- readRDS(paste0(data_folder, "DE_result_DESeq2.rds"))
+deseq_list <- readRDS(paste0(data_folder, "DE_result_DESeq2_stimulated.rds"))
 deseq_signif_counts <- sapply(deseq_list, function(x){filter(x, FDR < fdr_cutoff) %>% nrow()})
 ```
 
 ```{r mast}
-mast_list <- readRDS(paste0(data_folder, "DE_result_MAST.rds"))
+mast_list <- readRDS(paste0(data_folder, "DE_result_MAST_stimulated.rds"))
 mast_signif_counts <- sapply(mast_list, function(x){filter(x, FDR < fdr_cutoff) %>% nrow()})
 ```
 
 ```{r}
-scmageck_res <- readRDS(paste0(data_folder, "DE_result_scMAGeCK.rds"))
-colnames(scmageck_res$fdr)[colnames(scmageck_res$fdr) == "NegCtrl"] <- "Nontargeting"
+scmageck_res <- readRDS(paste0(data_folder, "DE_result_scMAGeCK_stimulated.rds"))
+colnames(scmageck_res$fdr)[colnames(scmageck_res$fdr) == "NegCtrl"] <- "NonTarget"
 scmageck_signif_counts <- colSums(scmageck_res$fdr[, KO_names] < fdr_cutoff)
 ```
 
 ```{r dge_comparison_merge}
-dge_comparison_df <- data.frame(Perturbation = names(lfsr_signif_num),
+dge_comparison_df <- data.frame(Perturbation = KO_names,
                                 GSFA = lfsr_signif_num,
                                 scMAGeCK = scmageck_signif_counts,
                                 DESeq2 = deseq_signif_counts,
                                 MAST = mast_signif_counts)
-dge_comparison_df$Perturbation[dge_comparison_df$Perturbation == "Nontargeting"] <- "NegCtrl"
+dge_comparison_df$Perturbation[dge_comparison_df$Perturbation == "NonTarget"] <- "NegCtrl"
 ```
 
-Figure 5E:
+Figure 4A:
 
-```{r Fig_5E, fig.width=13, fig.height=5}
+```{r Fig_4A, fig.width=13, fig.height=5.5}
 dge_plot_df <- reshape2::melt(dge_comparison_df, id.var = "Perturbation",
                               variable.name = "Method", value.name = "Num_DEGs")
 dge_plot_df$Perturbation <- factor(dge_plot_df$Perturbation,
-                                   levels = c("NegCtrl", KO_names[KO_names!="Nontargeting"]))
+                                   levels = c("NegCtrl", KO_names[KO_names!="NonTarget"]))
 ggplot(dge_plot_df, aes(x = Perturbation, y = Num_DEGs+1, fill = Method)) +
   geom_bar(position = "dodge", stat = "identity") +
   geom_text(aes(label = Num_DEGs), position=position_dodge(width=0.9), vjust=-0.25) +
   scale_y_log10() +
   scale_fill_brewer(palette = "Set2") +
-  labs(x = "Target gene",
+  labs(x = "Target genes",
        y = "Number of DEGs",
        title = "Number of DEGs detected by different methods") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
@@ -289,24 +318,23 @@ ggplot(dge_plot_df, aes(x = Perturbation, y = Num_DEGs+1, fill = Method)) +
 
 ### GSFA
 
-Figure 5G:
+Figure 4D:
 
-```{r Fig_5G, fig.width=6.5, fig.height=5}
-targets <- c("ADNP", "ARID1B", "ASH1L", "CHD2", "DYRK1A", "PTEN", "SETD5")
-named_lfsr_mat <- lfsr_mat
-rownames(named_lfsr_mat) <- genes_df$Name[match(rownames(lfsr_mat), genes_df$ID)]
+```{r Fig_4D, fig.width=5.5, fig.height=4.5}
+named_lfsr_mat <- lfsr_mat1
+rownames(named_lfsr_mat) <- genes_df$Name[match(rownames(lfsr_mat1), genes_df$ID)]
 complexplot_gene_perturbation(genes_df, interest_df,
                               targets = targets,
                               lfsr_mat = named_lfsr_mat,
                               effect_mat = gibbs_PM$W_pm %*%
-                                t(gibbs_PM$beta_pm[-nrow(gibbs_PM$beta_pm), ]))
+                                t(gibbs_PM$beta1_pm[-nrow(gibbs_PM$beta1_pm), ]))
 ```
 
 ### scMAGeCK
 
-Figure 5H:
+Figure 4E:
 
-```{r Fig_5H, fig.width=6.5, fig.height=5}
+```{r Fig_4E, fig.width=5.5, fig.height=4.5}
 score_mat <- scmageck_res$score
 rownames(score_mat) <- genes_df$Name[match(rownames(score_mat), genes_df$ID)]
 fdr_mat <- scmageck_res$fdr
@@ -314,10 +342,12 @@ rownames(fdr_mat) <- rownames(score_mat)
 complexplot_gene_perturbation(genes_df, interest_df,
                               targets = targets,
                               lfsr_mat = fdr_mat, lfsr_name = "FDR",
-                              effect_mat = score_mat, effect_name = "scMAGeCK\nselection score", 
+                              effect_mat = score_mat, effect_name = "scMAGeCK\nselection score",
                               score_break = c(-0.2, 0, 0.2),
                               color_break = c("blue3", "grey90", "red3"))
 ```
+
+### DESeq2
 
 ```{r}
 FC_mat <- matrix(nrow = nrow(interest_df), ncol = length(targets))
@@ -325,15 +355,14 @@ rownames(FC_mat) <- interest_df$gene_name
 colnames(FC_mat) <- targets
 fdr_mat <- FC_mat
 for (m in targets){
-  FC_mat[, m] <- deseq_list[[m]]$log2FoldChange[match(interest_df$gene_ID,
-                                                      deseq_list[[m]]$geneID)]
+  FC_mat[, m] <- deseq_list[[m]]$log2FoldChange[match(interest_df$gene_ID, deseq_list[[m]]$geneID)]
   fdr_mat[, m] <- deseq_list[[m]]$FDR[match(interest_df$gene_ID, deseq_list[[m]]$geneID)]
 }
 ```
 
-Figure S5C:
+Figure S4D:
 
-```{r Fig_S5C, fig.width=6.5, fig.height=5}
+```{r Fig_S4D, fig.width=5.5, fig.height=4.5}
 complexplot_gene_perturbation(genes_df, interest_df,
                               targets = targets,
                               lfsr_mat = fdr_mat, lfsr_name = "FDR",
@@ -355,9 +384,9 @@ for (m in targets){
 }
 ```
 
-Figure S5D:
+Figure S4E:
 
-```{r Fig_S5D, fig.width=6.5, fig.height=5}
+```{r Fig_S4E, fig.width=5.5, fig.height=4.5}
 complexplot_gene_perturbation(genes_df, interest_df,
                               targets = targets,
                               lfsr_mat = fdr_mat, lfsr_name = "FDR",
@@ -379,7 +408,7 @@ enrich_db <- "geneontology_Biological_Process_noRedundant"
 enrich_res <- list()
 for (i in targets){
   print(i)
-  interest_genes <- genes_df %>% mutate(lfsr = lfsr_mat[, i]) %>%
+  interest_genes <- genes_df %>% mutate(lfsr = lfsr_mat1[, i]) %>%
     filter(lfsr < lfsr_cutoff) %>% pull(ID)
   enrich_res[[i]] <- 
     WebGestaltR::WebGestaltR(enrichMethod = "ORA",
@@ -394,7 +423,7 @@ for (i in targets){
 ```
 
 ```{r}
-enrich_res <- readRDS(paste0(data_folder, "GO_enrich_in_GSFA_DEGs.rds"))
+enrich_res <- readRDS(paste0(data_folder, "GO_enrich_in_GSFA_DEGs_stimulated.rds"))
 signif_GO_list <- list()
 for (i in names(enrich_res)) {
   signif_GO_list[[i]] <- enrich_res[[i]] %>%
@@ -412,70 +441,86 @@ abs_FC_colormap <- circlize::colorRamp2(breaks = c(0, 3, 6),
 ```
 
 ```{r}
-targets <- names(enrich_res)
 enrich_table <- data.frame(matrix(nrow = nrow(signif_term_df),
                                   ncol = length(targets)),
                            row.names = signif_term_df$geneSet)
 colnames(enrich_table) <- targets
 for (i in 1:ncol(enrich_table)){
   m <- colnames(enrich_table)[i]
-  enrich_df <- enrich_res[[m]] %>% dplyr::filter(FDR < 0.05)
+  enrich_df <- enrich_res[[m]] %>% filter(enrichmentRatio > 2)
   enrich_table[enrich_df$geneSet, i] <- enrich_df$enrichmentRatio
 }
 rownames(enrich_table) <- signif_term_df$description
 ```
 
-```{r}
+```{r select_GO_terms_of_interest}
 terms_of_interest <- list()
-terms_of_interest[[1]] <- 
-  data.frame(description = c("axon development",
-                             "central nervous system neuron differentiation",
-                             "neuron projection guidance",
-                             "regulation of neuron projection development"))
 
-terms_of_interest[[2]] <- 
-  data.frame(description = c("regulation of transporter activity",
-                             "regulation of membrane potential",
-                             "regulation of ion transmembrane transport",
-                             "regulation of peptide secretion",
-                             "signal release"))
+terms_of_interest[[1]] <-
+  data.frame(description = c("positive regulation of cytokine production",
+                             "interferon-gamma production"))
 
-terms_of_interest[[3]] <- 
-  data.frame(description = c("neuropeptide signaling pathway",
-                             "cell communication by electrical coupling",
-                             "regulation of trans-synaptic signaling",
-                             "regulation of neurological system process",
-                             "neural precursor cell proliferation"))
+terms_of_interest[[2]] <-
+  data.frame(description = c("response to interferon-gamma",
+                             "response to interleukin-1",
+                             "response to chemokine",
+                             "response to type I interferon"))
 
-terms_of_interest[[4]] <- 
+terms_of_interest[[3]] <-
+  data.frame(description = c("T cell activation",
+                             "antigen processing and presentation"))
+terms_of_interest[[4]] <-
+  data.frame(description = c("ERK1 and ERK2 cascade",
+                             "NIK/NF-kappaB signaling",
+                             "integrin-mediated signaling pathway",
+                             "extrinsic apoptotic signaling pathway"))
+
+terms_of_interest[[5]] <-
+  data.frame(description = c("cytokine secretion",
+                             "regulation of peptide secretion"))
+
+terms_of_interest[[6]] <-
+  data.frame(description = c("cell recognition",
+                             "cell killing",
+                             "leukocyte proliferation",
+                             "regulation of cell-cell adhesion",
+                             "actin filament-based movement"))
+
+terms_of_interest[[7]] <-
+  data.frame(description = c("actin filament organization",
+                             "microtubule cytoskeleton organization involved in mitosis",
+                             "chromatin assembly or disassembly",
+                             "regulation of cell division"))
+
+terms_of_interest[[2]] <-
+  data.frame(description = c("leukocyte differentiation",
+                             "regulation of vasculature development",
+                             "regulation of hemopoiesis"))
+terms_of_interest[[8]] <-
   data.frame(description = c("RNA catabolic process",
-                             "ribonucleotide metabolic process",
-                             "ribonucleoprotein complex biogenesis",
-                             "mitochondrial respiratory chain complex assembly",
-                             "response to purine-containing compound"))
+                             "purine-containing compound biosynthetic process",
+                             "pyridine-containing compound metabolic process"))
 
 terms_of_interest_df <- do.call(rbind, terms_of_interest)
 terms_of_interest_df <- left_join(terms_of_interest_df, signif_term_df,
                                   by = "description")
 ```
 
-Figure S5E:
-```{r Fig_S5E, fig.height=5.5, fig.width=8}
-interest_enrich_table <- enrich_table[terms_of_interest_df$description,
-                                      colnames(enrich_table) != "DYRK1A"]
+Figure 4C:
+
+```{r Fig_4C, fig.height=5.5, fig.width=9}
+interest_enrich_table <- enrich_table[terms_of_interest_df$description, ]
 interest_enrich_table[is.na(interest_enrich_table)] <- 0
 
-map <- Heatmap(abs(interest_enrich_table),
+map <- Heatmap(interest_enrich_table,
                name = "Fold of enrichment",
                col = abs_FC_colormap,
-               na_col = "grey90",
                row_title = NULL, column_title = NULL,
                cluster_rows = F, cluster_columns = F,
                show_row_dend = F, show_column_dend = F,
                show_heatmap_legend = T,
                row_names_gp = gpar(fontsize = 10.5),
                column_names_rot = 45,
-               column_names_side = "top",
-               width = unit(6, "cm"))
-draw(map, heatmap_legend_side = "bottom")
+               width = unit(7, "cm"))
+draw(map, heatmap_legend_side = "right")
 ```

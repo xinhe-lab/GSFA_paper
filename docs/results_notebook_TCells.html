@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="Yifan Zhou (zhouyf@uchicago.edu)" />
+
+
+<title>GSFA Results of CD8+ T Cell CROP-seq Data</title>
+
+<script src="site_libs/jquery-3.5.1/jquery-3.5.1.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/flatly.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="site_libs/jqueryui-1.11.4/jquery-ui.min.js"></script>
+<link href="site_libs/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="site_libs/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<link href="site_libs/highlightjs-9.12.0/textmate.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-9.12.0/highlight.js"></script>
+<script src="site_libs/kePrint-0.0.1/kePrint.js"></script>
+<link href="site_libs/lightable-0.0.1/lightable.css" rel="stylesheet" />
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+<style type="text/css">
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #adb5bd;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script type="text/javascript">
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark it active
+  menuAnchor.tab('show');
+
+  // if it's got a parent navbar menu mark it active as well
+  menuAnchor.closest('li.dropdown').addClass('active');
+
+  // Navbar adjustments
+  var navHeight = $(".navbar").first().height() + 15;
+  var style = document.createElement('style');
+  var pt = "padding-top: " + navHeight + "px; ";
+  var mt = "margin-top: -" + navHeight + "px; ";
+  var css = "";
+  // offset scroll position for anchor links (for fixed navbar)
+  for (var i = 1; i <= 6; i++) {
+    css += ".section h" + i + "{ " + pt + mt + "}\n";
+  }
+  style.innerHTML = "body {" + pt + "padding-bottom: 40px; }\n" + css;
+  document.head.appendChild(style);
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "&#xe258;";
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">GSFA</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Home</a>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">GSFA Results of CD8+ T Cell CROP-seq Data</h1>
+<h3 class="subtitle">-- for manuscript</h3>
+<h4 class="author">Yifan Zhou (<a href="mailto:zhouyf@uchicago.edu">zhouyf@uchicago.edu</a>)</h4>
+<h4 class="date">2022-02</h4>
+
+</div>
+
+
+<div id="background" class="section level1">
+<h1><span class="header-section-number">1</span> Background</h1>
+<div id="input-data-and-pre-processing" class="section level2">
+<h2><span class="header-section-number">1.1</span> Input data and pre-processing</h2>
+<p>Source:<br />
+<a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6689405/">Genome-wide CRISPR Screens in Primary Human T Cells Reveal Key Regulators of Immune Function</a>, GEO accession: GSE119450.</p>
+<p>Perturbations:<br />
+CRISPR knock-out of 20 genes (2 gRNAs per gene) + 8 non-targeting gRNAs. Guide conditions were defined on the target gene level; target genes were either found to regulate T cell responses in the genome-wide screens, or known checkpoint genes.<br />
+Guide RNAs were introduced into T cells through a novel procedure called sgRNA lentiviral infection with Cas9 protein electroporation (SLICE).</p>
+<p>Cells:<br />
+Primary human CD8+ T cells from two healthy donors, <strong>with and without</strong> T cell receptor (TCR) stimulation.<br />
+Cells from 2 donors were pooled together into 1 analysis. All cells have only a single type of gRNA readout. Quality control resulted in 24995 cells, including 5533 donor1_unstim, 6843 donor1_stim, 5144 donor2_unstim, and 7435 donor2_stim cells.</p>
+<p>Genes:<br />
+<strong>Top 6000 genes ranked by the multinomial deviance statistics were kept.</strong></p>
+<p>Normalization:<br />
+Deviance residual transformation.<br />
+<strong>Donor batch was not corrected for.</strong><br />
+<strong>Unique UMI count, library size, and mitochondria percentage were all corrected for. The corrected and scaled expression data were used as input for subsequent GSFA.</strong></p>
+</div>
+<div id="gsfa" class="section level2">
+<h2><span class="header-section-number">1.2</span> GSFA</h2>
+<p>Input:<br />
+In addition to the expression matrix, we have a binary perturbation matrix (<span class="math inline">\(G\)</span>) consisting of 21 types (20 genes + negative control) of gene-level KO conditions across cells.</p>
+<p>For Gibbs sampling, we specified 20 factors initialized from truncated SVD. Results were obtained from 4000 iterations, with the posterior mean estimates averaged over the last 1000 iterations.</p>
+<p>The association of <span class="math inline">\(Z\)</span> with <span class="math inline">\(G\)</span> were estimated separately for stimulated and unstimulated cells, generating two effect size matrices, <span class="math inline">\(\beta_1\)</span> and <span class="math inline">\(\beta_0\)</span>, and two <span class="math inline">\(LFSR\)</span> matrices that summarized the effects of perturbations on genes for stimulated and unstimulated cells, respectively.</p>
+</div>
+</div>
+<div id="factor-perturbation-associations" class="section level1">
+<h1><span class="header-section-number">2</span> Factor ~ Perturbation Associations</h1>
+<div id="perturbation-effects-on-factors-beta-stimulated-cells" class="section level2">
+<h2><span class="header-section-number">2.1</span> Perturbation effects on factors (<span class="math inline">\(\beta\)</span>) (stimulated cells)</h2>
+<p>All targets and factors (Figure S4A):</p>
+<p><img src="results_notebook_TCells_files/figure-html/Fig_S4A-1.png" width="864" style="display: block; margin: auto;" /></p>
+<p>Effects of selected perturbations on factors (Figure 3A): <img src="results_notebook_TCells_files/figure-html/Fig_3A-1.png" width="432" style="display: block; margin: auto;" /></p>
+</div>
+<div id="factor-perturbation-association-p-values-stimulated-cells" class="section level2">
+<h2><span class="header-section-number">2.2</span> Factor-perturbation association p values (stimulated cells)</h2>
+<p><img src="results_notebook_TCells_files/figure-html/unnamed-chunk-2-1.png" width="960" style="display: block; margin: auto;" /></p>
+</div>
+<div id="perturbation-effects-on-factors-beta-unstimulated-cells" class="section level2">
+<h2><span class="header-section-number">2.3</span> Perturbation effects on factors (<span class="math inline">\(\beta\)</span>) (unstimulated cells)</h2>
+<p>All targets and factors (Figure S4B):</p>
+<p><img src="results_notebook_TCells_files/figure-html/Fig_S4B-1.png" width="864" style="display: block; margin: auto;" /></p>
+</div>
+</div>
+<div id="factor-interpretation" class="section level1">
+<h1><span class="header-section-number">3</span> Factor Interpretation</h1>
+<div id="correlation-within-factors" class="section level2">
+<h2><span class="header-section-number">3.1</span> Correlation within factors</h2>
+<p><img src="results_notebook_TCells_files/figure-html/unnamed-chunk-3-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p><img src="results_notebook_TCells_files/figure-html/unnamed-chunk-4-1.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+<div id="gene-loading-in-factors" class="section level2">
+<h2><span class="header-section-number">3.2</span> Gene loading in factors</h2>
+<p>T cell markers:</p>
+<div style="border: 1px solid #ddd; padding: 0px; overflow-y: scroll; height:400px; overflow-x: scroll; width:100%; ">
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;">
+gene_name
+</th>
+<th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;">
+type
+</th>
+<th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;">
+protein_name
+</th>
+<th style="text-align:left;position: sticky; top:0; background-color: #FFFFFF;">
+gene_ID
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+IL7R
+</td>
+<td style="text-align:left;">
+T cell resting state
+</td>
+<td style="text-align:left;">
+IL-7 receptor
+</td>
+<td style="text-align:left;">
+ENSG00000168685
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+CCR7
+</td>
+<td style="text-align:left;">
+T cell resting state
+</td>
+<td style="text-align:left;">
+C-C motif chemokine receptor 7
+</td>
+<td style="text-align:left;">
+ENSG00000126353
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+GZMB
+</td>
+<td style="text-align:left;">
+T cell activation
+</td>
+<td style="text-align:left;">
+Granzyme B
+</td>
+<td style="text-align:left;">
+ENSG00000100453
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+IFNG
+</td>
+<td style="text-align:left;">
+T cell activation
+</td>
+<td style="text-align:left;">
+Interferon gamma
+</td>
+<td style="text-align:left;">
+ENSG00000111537
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+CD44
+</td>
+<td style="text-align:left;">
+T cell activation
+</td>
+<td style="text-align:left;">
+CD44
+</td>
+<td style="text-align:left;">
+ENSG00000026508
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+IL2RA
+</td>
+<td style="text-align:left;">
+T cell activation
+</td>
+<td style="text-align:left;">
+IL-2 receptor
+</td>
+<td style="text-align:left;">
+ENSG00000134460
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+XCL1
+</td>
+<td style="text-align:left;">
+T cell activation
+</td>
+<td style="text-align:left;">
+X-C motif chemokine ligand 1
+</td>
+<td style="text-align:left;">
+ENSG00000143184
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+TNFRSF18
+</td>
+<td style="text-align:left;">
+T cell activation
+</td>
+<td style="text-align:left;">
+GITR
+</td>
+<td style="text-align:left;">
+ENSG00000186891
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+ITGAL
+</td>
+<td style="text-align:left;">
+T cell activation
+</td>
+<td style="text-align:left;">
+LFA-1
+</td>
+<td style="text-align:left;">
+ENSG00000005844
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+MKI67
+</td>
+<td style="text-align:left;">
+Cell proliferation
+</td>
+<td style="text-align:left;">
+Marker of proliferation Ki-67
+</td>
+<td style="text-align:left;">
+ENSG00000148773
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+TOP2A
+</td>
+<td style="text-align:left;">
+Cell proliferation
+</td>
+<td style="text-align:left;">
+DNA topoisomerase II alpha
+</td>
+<td style="text-align:left;">
+ENSG00000131747
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+CENPF
+</td>
+<td style="text-align:left;">
+Cell proliferation
+</td>
+<td style="text-align:left;">
+Centromere protein F
+</td>
+<td style="text-align:left;">
+ENSG00000117724
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>All factors (Figure S4C):</p>
+<p><img src="results_notebook_TCells_files/figure-html/Fig_S4C-1.png" width="816" style="display: block; margin: auto;" /></p>
+<p>Selected factors (Figure 3C):</p>
+<p><img src="results_notebook_TCells_files/figure-html/Fig_3C-1.png" width="528" style="display: block; margin: auto;" /></p>
+</div>
+<div id="go-enrichment-analysis-in-factors" class="section level2">
+<h2><span class="header-section-number">3.3</span> GO enrichment analysis in factors</h2>
+<p>Foreground genes: Genes w/ non-zero loadings in each factor (gene PIP &gt; 0.95);<br />
+Background genes: all 6000 genes used in GSFA;<br />
+Statistical test: hypergeometric test (over-representation test);<br />
+Gene sets: Gene ontology &quot;Biological Process&quot; (non-redundant).</p>
+<p>Figure 3D:</p>
+<p><img src="results_notebook_TCells_files/figure-html/Fig_3D_factor2-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p><img src="results_notebook_TCells_files/figure-html/Fig_3D_factor9-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p><img src="results_notebook_TCells_files/figure-html/Fig_3D_factor4-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p><img src="results_notebook_TCells_files/figure-html/Fig_3D_factor12-1.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+</div>
+<div id="deg-interpretation" class="section level1">
+<h1><span class="header-section-number">4</span> DEG Interpretation</h1>
+<p><strong>Here, we compared the DEG results within stimulated cells.</strong></p>
+<div id="number-of-degs-detected-by-different-methods" class="section level2">
+<h2><span class="header-section-number">4.1</span> Number of DEGs detected by different methods</h2>
+<div style="border: 1px solid #ddd; padding: 5px; overflow-x: scroll; width:100%; ">
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<caption>
+Number of DEGs detected by GSFA:
+</caption>
+<tbody>
+<tr>
+<td style="text-align:left;">
+KO
+</td>
+<td style="text-align:left;">
+ARID1A
+</td>
+<td style="text-align:left;">
+BTLA
+</td>
+<td style="text-align:left;">
+C10orf54
+</td>
+<td style="text-align:left;">
+CBLB
+</td>
+<td style="text-align:left;">
+CD3D
+</td>
+<td style="text-align:left;">
+CD5
+</td>
+<td style="text-align:left;">
+CDKN1B
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Num_genes
+</td>
+<td style="text-align:left;">
+448
+</td>
+<td style="text-align:left;">
+0
+</td>
+<td style="text-align:left;">
+0
+</td>
+<td style="text-align:left;">
+481
+</td>
+<td style="text-align:left;">
+0
+</td>
+<td style="text-align:left;">
+586
+</td>
+<td style="text-align:left;">
+710
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+KO
+</td>
+<td style="text-align:left;">
+DGKA
+</td>
+<td style="text-align:left;">
+DGKZ
+</td>
+<td style="text-align:left;">
+HAVCR2
+</td>
+<td style="text-align:left;">
+LAG3
+</td>
+<td style="text-align:left;">
+LCP2
+</td>
+<td style="text-align:left;">
+MEF2D
+</td>
+<td style="text-align:left;">
+NonTarget
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Num_genes
+</td>
+<td style="text-align:left;">
+148
+</td>
+<td style="text-align:left;">
+0
+</td>
+<td style="text-align:left;">
+0
+</td>
+<td style="text-align:left;">
+0
+</td>
+<td style="text-align:left;">
+586
+</td>
+<td style="text-align:left;">
+0
+</td>
+<td style="text-align:left;">
+0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+KO
+</td>
+<td style="text-align:left;">
+PDCD1
+</td>
+<td style="text-align:left;">
+RASA2
+</td>
+<td style="text-align:left;">
+SOCS1
+</td>
+<td style="text-align:left;">
+STAT6
+</td>
+<td style="text-align:left;">
+TCEB2
+</td>
+<td style="text-align:left;">
+TMEM222
+</td>
+<td style="text-align:left;">
+TNFRSF9
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Num_genes
+</td>
+<td style="text-align:left;">
+0
+</td>
+<td style="text-align:left;">
+271
+</td>
+<td style="text-align:left;">
+511
+</td>
+<td style="text-align:left;">
+0
+</td>
+<td style="text-align:left;">
+240
+</td>
+<td style="text-align:left;">
+0
+</td>
+<td style="text-align:left;">
+0
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Figure 4A:</p>
+<p><img src="results_notebook_TCells_files/figure-html/Fig_4A-1.png" width="1248" style="display: block; margin: auto;" /></p>
+</div>
+<div id="perturbation-effects-on-marker-genes" class="section level2">
+<h2><span class="header-section-number">4.2</span> Perturbation effects on marker genes</h2>
+<div id="gsfa-1" class="section level3">
+<h3><span class="header-section-number">4.2.1</span> GSFA</h3>
+<p>Figure 4D:</p>
+<p><img src="results_notebook_TCells_files/figure-html/Fig_4D-1.png" width="528" style="display: block; margin: auto;" /></p>
+</div>
+<div id="scmageck" class="section level3">
+<h3><span class="header-section-number">4.2.2</span> scMAGeCK</h3>
+<p>Figure 4E:</p>
+<p><img src="results_notebook_TCells_files/figure-html/Fig_4E-1.png" width="528" style="display: block; margin: auto;" /></p>
+</div>
+<div id="deseq2" class="section level3">
+<h3><span class="header-section-number">4.2.3</span> DESeq2</h3>
+<p>Figure S4D:</p>
+<p><img src="results_notebook_TCells_files/figure-html/Fig_S4D-1.png" width="528" style="display: block; margin: auto;" /></p>
+</div>
+<div id="mast" class="section level3">
+<h3><span class="header-section-number">4.2.4</span> MAST</h3>
+<p>Figure S4E:</p>
+<p><img src="results_notebook_TCells_files/figure-html/Fig_S4E-1.png" width="528" style="display: block; margin: auto;" /></p>
+</div>
+</div>
+<div id="go-enrichment-in-degs" class="section level2">
+<h2><span class="header-section-number">4.3</span> GO enrichment in DEGs</h2>
+<p>Foreground genes: Genes w/ GSFA LFSR &lt; 0.05 under each perturbation;<br />
+Background genes: all 6000 genes used in GSFA;<br />
+Statistical test: hypergeometric test (over-representation test);<br />
+Gene sets: Gene ontology &quot;Biological Process&quot; (non-redundant).</p>
+<p>Figure 4C:</p>
+<p><img src="results_notebook_TCells_files/figure-html/Fig_4C-1.png" width="864" style="display: block; margin: auto;" /></p>
+</div>
+</div>
+
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+<script>
+$(document).ready(function ()  {
+
+    // temporarily add toc-ignore selector to headers for the consistency with Pandoc
+    $('.unlisted.unnumbered').addClass('toc-ignore')
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_');
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

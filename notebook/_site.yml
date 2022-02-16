@@ -1,0 +1,17 @@
+name: Guided Sparse Factor Analysis
+output_dir: "../docs"
+include: [".nojekyll"]
+exclude: ["include"]
+navbar:
+  title: GSFA
+  left:
+    - text: "Home"
+      href: index.html
+
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: textmate
+    lib_dir: site_libs
