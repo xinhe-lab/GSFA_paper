@@ -92,9 +92,12 @@ stopifnot(file.exists(expression_file) & file.exists(perturbation_file) &
             file.exists(sample_group_file) & dir.exists(out_folder))
 print("Loading input data ...")
 scaled.gene_exp <- readRDS(expression_file)
-scaled.gene_exp <- t(scaled.gene_exp)
 G_mat <- readRDS(perturbation_file)
 sample_group <- readRDS(sample_group_file)
+
+if (nrow(scaled.gene_exp) != nrow(G_mat)){
+  scaled.gene_exp <- t(scaled.gene_exp)
+}
 stopifnot(rownames(scaled.gene_exp) == rownames(G_mat) & 
             rownames(G_mat) == names(sample_group))
 
