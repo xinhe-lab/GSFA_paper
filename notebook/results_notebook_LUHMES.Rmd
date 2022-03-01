@@ -26,9 +26,10 @@ theme_set(theme_bw() + theme(plot.title = element_text(size = 14, hjust = 0.5),
 library(gridExtra)
 library(ComplexHeatmap)
 library(kableExtra)
+library(WebGestaltR)
 
 # set default chunk output
-knitr::opts_chunk$set(echo = FALSE,
+knitr::opts_chunk$set(echo = T,
                       message = FALSE,
                       warning = FALSE,
                       comment = NA,
@@ -41,18 +42,6 @@ knitr::opts_chunk$set(echo = FALSE,
 # formatting of pander tables
 pander::panderOptions('knitr.auto.asis', FALSE)
 pander::panderOptions("table.split.table", Inf)
-```
-
-```{r}
-source("/project2/xinhe/yifan/Factor_analysis/paper/R/plotting_functions.R")
-data_folder <- "/project2/xinhe/yifan/Factor_analysis/paper/data/LUHMES/"
-
-G_mat <- readRDS(paste0(data_folder, "perturbation_matrix.rds"))
-gibbs_PM <- readRDS(paste0(data_folder, "gsfa_posterior_means.rds"))
-lfsr_mat <- readRDS(paste0(data_folder, "lfsr_matrix.rds"))
-genes_df <- readRDS(paste0(data_folder, "top6k_genes.rds"))
-interest_df <- readRDS(paste0(data_folder, "selected_neuronal_markers.rds"))
-KO_names <- colnames(lfsr_mat)
 ```
 
 # Background
@@ -83,6 +72,21 @@ In addition to the expression matrix, we have a binary perturbation matrix ($G$)
 
 For Gibbs sampling, we specified 20 factors initialized from truncated SVD. Results were obtained from 3000 iterations, with the posterior mean estimates averaged over the last 1000 iterations.
 
+```{r}
+## Load data and plotting functions
+source("../R/plotting_functions.R")
+data_folder <- "../data/LUHMES/"
+
+## Load the lighter GSFA output from "R/run_LUHMES.R":
+fit <- readRDS(paste0(data_folder, "gsfa_fit.light.rds"))
+gibbs_PM <- fit$posterior_means
+lfsr_mat <- fit$lfsr[, -ncol(fit$lfsr)]
+G_mat <- readRDS(paste0(data_folder, "perturbation_matrix.rds"))
+genes_df <- readRDS(paste0(data_folder, "top6k_genes.rds"))
+interest_df <- readRDS(paste0(data_folder, "selected_neuronal_markers.rds"))
+KO_names <- colnames(lfsr_mat)
+```
+
 # Factor ~ Perturbation Association
 
 ## Perturbation effects on factors ($\beta$)
@@ -96,15 +100,29 @@ dotplot_beta_PIP(t(gibbs_PM$Gamma_pm), t(gibbs_PM$beta_pm),
   coord_flip()
 ```
 
+```{r fig.width=8, fig.height=5.5, eval=F}
+## Similar visualization using GSFA built-in functions:
+GSFA::dotplot_beta_PIP(fit,
+                       target_names = KO_names,
+                       reorder_targets = c(KO_names[KO_names!="Nontargeting"], "Nontargeting"))
+```
+
 Effects of selected perturbations on factors (Figure 5A):
 
 ```{r Fig_5A, fig.width=4, fig.height=4}
-reorder_KO <- c("ADNP", "ARID1B", "ASH1L", "CHD2", "DYRK1A", "PTEN", "SETD5")
+targets <- c("ADNP", "ARID1B", "ASH1L", "CHD2", "DYRK1A", "PTEN", "SETD5")
 complexplot_perturbation_factor(gibbs_PM$Gamma_pm[-nrow(gibbs_PM$Gamma_pm), ],
                                 gibbs_PM$beta_pm[-nrow(gibbs_PM$beta_pm), ],
                                 marker_names = KO_names,
-                                reorder_markers = reorder_KO,
+                                reorder_markers = targets,
                                 reorder_factors = c(4, 9, 16))
+```
+
+```{r fig.width=4, fig.height=4, eval=F}
+## Similar visualization using GSFA built-in functions:
+GSFA::dotplot_beta_PIP(fit,
+                       target_names = KO_names,
+                       reorder_targets = targets, reorder_factors = c(4, 9, 16))
 ```
 
 ## Factor-perturbation association p values
@@ -140,7 +158,7 @@ plot_pairwise.corr_heatmap(input_mat_1 = (gibbs_PM$F_pm > 0.95) * 1,
 
 Neuronal differentiation markers:
 
-```{r}
+```{r echo=FALSE}
 interest_df <- interest_df[interest_df$gene_name %in% genes_df$Name, ]
 rownames(interest_df) <- NULL
 knitr::kable(interest_df) %>%
@@ -168,11 +186,12 @@ Statistical test: hypergeometric test (over-representation test);
 Gene sets: Gene ontology "Biological Process" (non-redundant).
 
 ```{r eval=FALSE}
+## The "WebGestaltR" tool needs Internet connection.
 enrich_db <- "geneontology_Biological_Process_noRedundant"
 PIP_mat <- gibbs_PM$F_pm
-enrich_res <- list()
+enrich_res_by_factor <- list()
 for (i in 1:ncol(PIP_mat)){
-  enrich_res[[i]] <- 
+  enrich_res_by_factor[[i]] <- 
     WebGestaltR::WebGestaltR(enrichMethod = "ORA",
                              organism = "hsapiens",
                              enrichDatabase = enrich_db,
@@ -184,7 +203,7 @@ for (i in 1:ncol(PIP_mat)){
 }
 ```
 
-```{r}
+```{r echo=FALSE}
 enrich_res_by_factor <- readRDS(paste0(data_folder, "GO_enrich_in_GSFA_factors.rds"))
 ```
 
@@ -231,6 +250,9 @@ barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
 ```{r}
 fdr_cutoff <- 0.05
 lfsr_cutoff <- 0.05
+```
+
+```{r echo=FALSE}
 lfsr_signif_num <- colSums(lfsr_mat < lfsr_cutoff)
 signif_num_tb <- t(data.frame(KO = names(lfsr_signif_num),
                            Num_genes = lfsr_signif_num,
@@ -293,13 +315,20 @@ Figure 5G:
 
 ```{r Fig_5G, fig.width=6.5, fig.height=5}
 targets <- c("ADNP", "ARID1B", "ASH1L", "CHD2", "DYRK1A", "PTEN", "SETD5")
-named_lfsr_mat <- lfsr_mat
-rownames(named_lfsr_mat) <- genes_df$Name[match(rownames(lfsr_mat), genes_df$ID)]
 complexplot_gene_perturbation(genes_df, interest_df,
                               targets = targets,
-                              lfsr_mat = named_lfsr_mat,
+                              lfsr_mat = lfsr_mat,
                               effect_mat = gibbs_PM$W_pm %*%
                                 t(gibbs_PM$beta_pm[-nrow(gibbs_PM$beta_pm), ]))
+```
+
+```{r fig.width=5.5, fig.height=5, eval=F}
+## Similar visualization using GSFA built-in functions:
+GSFA::dotplot_total_effect(fit,
+                           gene_indices = match(interest_df$gene_ID, rownames(lfsr_mat)),
+                           gene_names = interest_df$gene_name,
+                           reorder_targets = targets, 
+                           plot_max_score = 0.2)
 ```
 
 ### scMAGeCK
@@ -308,9 +337,7 @@ Figure 5H:
 
 ```{r Fig_5H, fig.width=6.5, fig.height=5}
 score_mat <- scmageck_res$score
-rownames(score_mat) <- genes_df$Name[match(rownames(score_mat), genes_df$ID)]
 fdr_mat <- scmageck_res$fdr
-rownames(fdr_mat) <- rownames(score_mat)
 complexplot_gene_perturbation(genes_df, interest_df,
                               targets = targets,
                               lfsr_mat = fdr_mat, lfsr_name = "FDR",
@@ -318,6 +345,8 @@ complexplot_gene_perturbation(genes_df, interest_df,
                               score_break = c(-0.2, 0, 0.2),
                               color_break = c("blue3", "grey90", "red3"))
 ```
+
+### DESeq2
 
 ```{r}
 FC_mat <- matrix(nrow = nrow(interest_df), ncol = length(targets))
@@ -374,6 +403,7 @@ Statistical test: hypergeometric test (over-representation test);
 Gene sets: Gene ontology "Biological Process" (non-redundant).
 
 ```{r eval=FALSE}
+## The "WebGestaltR" tool needs Internet connection.
 targets <- names(lfsr_signif_num)[lfsr_signif_num > 0]
 enrich_db <- "geneontology_Biological_Process_noRedundant"
 enrich_res <- list()
@@ -393,8 +423,11 @@ for (i in targets){
 }
 ```
 
-```{r}
+```{r echo=FALSE}
 enrich_res <- readRDS(paste0(data_folder, "GO_enrich_in_GSFA_DEGs.rds"))
+```
+
+```{r}
 signif_GO_list <- list()
 for (i in names(enrich_res)) {
   signif_GO_list[[i]] <- enrich_res[[i]] %>%
@@ -425,7 +458,7 @@ for (i in 1:ncol(enrich_table)){
 rownames(enrich_table) <- signif_term_df$description
 ```
 
-```{r}
+```{r echo=FALSE}
 terms_of_interest <- list()
 terms_of_interest[[1]] <- 
   data.frame(description = c("axon development",
@@ -459,7 +492,7 @@ terms_of_interest_df <- left_join(terms_of_interest_df, signif_term_df,
                                   by = "description")
 ```
 
-Figure S5E:
+Fold of enrichment for selected GO BP terms (Figure S5E):
 ```{r Fig_S5E, fig.height=5.5, fig.width=8}
 interest_enrich_table <- enrich_table[terms_of_interest_df$description,
                                       colnames(enrich_table) != "DYRK1A"]
@@ -478,4 +511,11 @@ map <- Heatmap(abs(interest_enrich_table),
                column_names_side = "top",
                width = unit(6, "cm"))
 draw(map, heatmap_legend_side = "bottom")
+```
+
+
+# Session Information
+
+```{r results="markup"}
+sessionInfo()
 ```

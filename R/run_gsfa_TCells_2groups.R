@@ -1,8 +1,8 @@
-## Recommend to run this script on a computing cluster that allows for
-## ~ 50GB memory and ~ 5.5 hours of no interruption.
+## Recommend to run this script on a computing cluster that can guarantee 
+## 50GB memory and 6 (typically ~5.5) hours of runtime without interruption.
 ## GSFA results were generated under default parameters with the output of
 ## "scaled.gene_exp", "G_mat" and "group" from "preprocess_TCells.R" as GSFA input.
-## Gibbs sampling was performed for 2000 iterations in a first run,
+## Gibbs sampling was performed for 2000 iterations in an initial run,
 ## and then carried on for another 2000 iterations in a second run
 ## using the "restart" option.
 ## If limited run time and memory can be allocated, set "niter" to a smaller
@@ -30,22 +30,6 @@ option_list <- list(
     help = "Directory of output folder (must end with a \'/\') [required]"
   ),
   make_option(
-    "--restart", action = "store", default = FALSE,
-    help = "Flag to resume GSFA on previous result, default is %default"
-  ),
-  make_option(
-    "--previous_res", action = "store", default = NA, type = 'character',
-    help = "RDS file storing previous GSFA result to resume GSFA on [required when restart=TRUE]"
-  ),
-  make_option(
-    "--permute", action = "store", default = FALSE,
-    help = "Flag to perform permutation on the cells before GSFA, default is %default"
-  ),
-  make_option(
-    "--perm_num",  action = "store", default = 1, type = 'integer',
-    help = "Permutation index from 1 to 10, default is %default [required when permute==TRUE]"
-  ),
-  make_option(
     "--init_method", action = "store", default = "svd", type = 'character',
     help = "Type of initialization method to use, can be \"svd\" or \"random\", default is %default"
   ),
@@ -68,6 +52,26 @@ option_list <- list(
   make_option(
     "--random_seed", action = "store", default = 92629, type = 'integer',
     help = "Set a random seed for Gibbs sampling, default is %default [required for all types of initializations]"
+  ),
+  make_option(
+    "--restart", action = "store", default = FALSE,
+    help = "Flag to resume GSFA on previous result, default is %default"
+  ),
+  make_option(
+    "--previous_res", action = "store", default = NA, type = 'character',
+    help = "RDS file storing previous GSFA fit object to resume Gibbs sampling on [required when restart=TRUE]"
+  ),
+  make_option(
+    "--permute", action = "store", default = FALSE,
+    help = "Flag to perform permutation on the cells before GSFA, default is %default"
+  ),
+  make_option(
+    "--perm_num",  action = "store", default = 1, type = 'integer',
+    help = "Permutation index from 1 to 10, default is %default [required when permute==TRUE]"
+  ),
+  make_option(
+    "--store_all_samples", action = "store", default = TRUE,
+    help = "Flag to store samples throughout Gibbs iterations, can be turned off if storage is limited, default is %default"
   )
 )
 opt <- parse_args(OptionParser(option_list = option_list))
@@ -82,6 +86,7 @@ K <- opt$K # 20
 niter <- opt$niter
 average_niter <- opt$average_niter # 1000
 random_seed <- opt$random_seed # 92629
+return_samples <- opt$store_all_samples
 
 stopifnot(file.exists(expression_file) & file.exists(perturbation_file) &
             file.exists(sample_group_file) & dir.exists(out_folder))
@@ -103,7 +108,7 @@ if (opt$restart){
 
 if (!opt$permute){
   set.seed(random_seed)
-  out_dir <- paste0(out_folder, "gibbs_obj_k", K, ".", out_suffix, ".rds")
+  out_dir <- paste0(out_folder, "gibbs_obj_k", K, ".", out_suffix, ".seed_", random_seed, ".rds")
 } else {
   stopifnot(opt$perm_num %in% 1:10)
   seeds <- c(49553, 72704, 11932, 56826, 49707, 33357, 93747, 95392, 96675, 38186)
@@ -123,7 +128,7 @@ if (file.exists(out_dir)){
   warnings("Output file exists and will be overwritten!")
 }
 
-if (opt$restart == F){
+if (!opt$restart){
   print(paste0("Performing GSFA with ", K, " factors and ", niter, " iterations."))
   print(paste0("Results will be saved at ", out_dir))
   fit <- fit_gsfa_multivar_2groups(Y = scaled.gene_exp, G = G_mat, 
@@ -132,7 +137,7 @@ if (opt$restart == F){
                                    prior_w_s = 50, prior_w_r = 0.2,
                                    prior_beta_s = 20, prior_beta_r = 0.2,
                                    niter = niter, used_niter = average_niter,
-                                   verbose = T, return_samples = T)
+                                   verbose = T, return_samples = return_samples)
 } else {
   print(paste0("Resuming GSFA on top of a previous result saved at ", opt$previous_res,
                " for ", niter, " iterations."))
@@ -143,21 +148,25 @@ if (opt$restart == F){
                                    prior_w_s = 50, prior_w_r = 0.2,
                                    prior_beta_s = 20, prior_beta_r = 0.2,
                                    niter = niter, used_niter = average_niter,
-                                   verbose = T, return_samples = T)
+                                   verbose = T, return_samples = return_samples)
 }
-print("Finished! Saving the results...")
-saveRDS(fit, file = out_dir)
 
-saveRDS(fit$posterior_means, file = sub(pattern = ".rds", replacement = ".PM.rds", x = out_dir))
+print("Finished! Saving the results...")
+if (return_samples){
+  saveRDS(fit, file = out_dir)
+  big_items <- names(fit)[endsWith(names(fit), "samples")]
+  for (i in big_items){
+    fit[[i]] <- NULL
+  }
+}
+saveRDS(fit, file = sub(pattern = ".rds", replacement = ".light.rds", x = out_dir))
 
 lfsr0_mat <- fit$lfsr0
 lfsr0_mat <- lfsr0_mat[, -ncol(lfsr0_mat)]
 print("Group 0, # of genes that pass LFSR < 0.05:")
 print(colSums(lfsr0_mat < 0.05))
-saveRDS(lfsr0_mat, file = sub(pattern = ".rds", replacement = ".lfsr_mat.group0.rds", x = out_dir))
   
 lfsr1_mat <- fit$lfsr1
 lfsr1_mat <- lfsr1_mat[, -ncol(lfsr1_mat)]
 print("Group 1, # of genes that pass LFSR < 0.05 (computed from all factors):")
 print(colSums(lfsr1_mat < 0.05))
-saveRDS(lfsr1_mat, file = sub(pattern = ".rds", replacement = ".lfsr_mat.group1.rds", x = out_dir))

@@ -26,9 +26,10 @@ theme_set(theme_bw() + theme(plot.title = element_text(size = 14, hjust = 0.5),
 library(gridExtra)
 library(ComplexHeatmap)
 library(kableExtra)
+library(WebGestaltR)
 
 # set default chunk output
-knitr::opts_chunk$set(echo = FALSE,
+knitr::opts_chunk$set(echo = TRUE,
                       message = FALSE,
                       warning = FALSE,
                       comment = NA,
@@ -41,19 +42,6 @@ knitr::opts_chunk$set(echo = FALSE,
 # formatting of pander tables
 pander::panderOptions('knitr.auto.asis', FALSE)
 pander::panderOptions("table.split.table", Inf)
-```
-
-```{r}
-source("/project2/xinhe/yifan/Factor_analysis/paper/R/plotting_functions.R")
-data_folder <- "/project2/xinhe/yifan/Factor_analysis/paper/data/TCells/"
-
-G_mat <- readRDS(paste0(data_folder, "perturbation_matrix.rds"))
-gibbs_PM <- readRDS(paste0(data_folder, "gsfa_posterior_means.rds"))
-lfsr_mat1 <- readRDS(paste0(data_folder, "lfsr_matrix_stimulated.rds"))
-lfsr_mat0 <- readRDS(paste0(data_folder, "lfsr_matrix_unstimulated.rds"))
-genes_df <- readRDS(paste0(data_folder, "top6k_genes.rds"))
-interest_df <- readRDS(paste0(data_folder, "selected_tcell_markers.rds"))
-KO_names <- colnames(lfsr_mat1)
 ```
 
 # Background
@@ -87,6 +75,23 @@ In addition to the expression matrix, we have a binary perturbation matrix ($G$)
 For Gibbs sampling, we specified 20 factors initialized from truncated SVD. Results were obtained from 4000 iterations, with the posterior mean estimates averaged over the last 1000 iterations.
 
 The association of $Z$ with $G$ were estimated separately for stimulated and unstimulated cells, generating two effect size matrices, $\beta_1$ and $\beta_0$, and two $LFSR$ matrices that summarized the effects of perturbations on genes for stimulated and unstimulated cells, respectively.
+
+```{r}
+## Load data and plotting functions
+source("../R/plotting_functions.R")
+data_folder <- "../data/TCells/"
+
+## Load the lighter GSFA output from "R/run_gsfa_TCells_2groups.R":
+fit <- readRDS(paste0(data_folder, "gsfa_fit.light.rds"))
+gibbs_PM <- fit$posterior_means
+lfsr_mat1 <- fit$lfsr1[, -ncol(fit$lfsr1)]
+lfsr_mat0 <- fit$lfsr0[, -ncol(fit$lfsr0)]
+
+G_mat <- readRDS(paste0(data_folder, "perturbation_matrix.rds"))
+genes_df <- readRDS(paste0(data_folder, "top6k_genes.rds"))
+interest_df <- readRDS(paste0(data_folder, "selected_tcell_markers.rds"))
+KO_names <- colnames(lfsr_mat1)
+```
 
 # Factor ~ Perturbation Associations
 
@@ -160,7 +165,7 @@ plot_pairwise.corr_heatmap(input_mat_1 = (gibbs_PM$F_pm > 0.95) * 1,
 
 T cell markers:
 
-```{r}
+```{r echo=FALSE}
 interest_df <- interest_df[interest_df$gene_name %in% genes_df$Name, ]
 rownames(interest_df) <- NULL
 knitr::kable(interest_df) %>%
@@ -188,6 +193,7 @@ Statistical test: hypergeometric test (over-representation test);
 Gene sets: Gene ontology "Biological Process" (non-redundant).
 
 ```{r eval=FALSE}
+## The "WebGestaltR" tool needs Internet connection.
 enrich_db <- "geneontology_Biological_Process_noRedundant"
 PIP_mat <- gibbs_PM$F_pm
 enrich_res <- list()
@@ -204,7 +210,7 @@ for (i in 1:ncol(PIP_mat)){
 }
 ```
 
-```{r}
+```{r echo=FALSE}
 enrich_res_by_factor <- readRDS(paste0(data_folder, "GO_enrich_in_GSFA_factors.rds"))
 ```
 
@@ -259,6 +265,9 @@ barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
 ```{r lfsr}
 fdr_cutoff <- 0.05
 lfsr_cutoff <- 0.05
+```
+
+```{r echo=FALSE}
 lfsr_signif_num <- colSums(lfsr_mat1 < lfsr_cutoff)
 signif_num_tb <- t(data.frame(KO = names(lfsr_signif_num),
                            Num_genes = lfsr_signif_num,
@@ -321,11 +330,9 @@ ggplot(dge_plot_df, aes(x = Perturbation, y = Num_DEGs+1, fill = Method)) +
 Figure 4D:
 
 ```{r Fig_4D, fig.width=5.5, fig.height=4.5}
-named_lfsr_mat <- lfsr_mat1
-rownames(named_lfsr_mat) <- genes_df$Name[match(rownames(lfsr_mat1), genes_df$ID)]
 complexplot_gene_perturbation(genes_df, interest_df,
                               targets = targets,
-                              lfsr_mat = named_lfsr_mat,
+                              lfsr_mat = lfsr_mat1,
                               effect_mat = gibbs_PM$W_pm %*%
                                 t(gibbs_PM$beta1_pm[-nrow(gibbs_PM$beta1_pm), ]))
 ```
@@ -336,13 +343,12 @@ Figure 4E:
 
 ```{r Fig_4E, fig.width=5.5, fig.height=4.5}
 score_mat <- scmageck_res$score
-rownames(score_mat) <- genes_df$Name[match(rownames(score_mat), genes_df$ID)]
 fdr_mat <- scmageck_res$fdr
-rownames(fdr_mat) <- rownames(score_mat)
 complexplot_gene_perturbation(genes_df, interest_df,
                               targets = targets,
                               lfsr_mat = fdr_mat, lfsr_name = "FDR",
-                              effect_mat = score_mat, effect_name = "scMAGeCK\nselection score",
+                              effect_mat = score_mat, 
+                              effect_name = "scMAGeCK\nselection score",
                               score_break = c(-0.2, 0, 0.2),
                               color_break = c("blue3", "grey90", "red3"))
 ```
@@ -355,8 +361,10 @@ rownames(FC_mat) <- interest_df$gene_name
 colnames(FC_mat) <- targets
 fdr_mat <- FC_mat
 for (m in targets){
-  FC_mat[, m] <- deseq_list[[m]]$log2FoldChange[match(interest_df$gene_ID, deseq_list[[m]]$geneID)]
-  fdr_mat[, m] <- deseq_list[[m]]$FDR[match(interest_df$gene_ID, deseq_list[[m]]$geneID)]
+  FC_mat[, m] <- deseq_list[[m]]$log2FoldChange[match(interest_df$gene_ID, 
+                                                      deseq_list[[m]]$geneID)]
+  fdr_mat[, m] <- deseq_list[[m]]$FDR[match(interest_df$gene_ID, 
+                                            deseq_list[[m]]$geneID)]
 }
 ```
 
@@ -379,8 +387,10 @@ rownames(FC_mat) <- interest_df$gene_name
 colnames(FC_mat) <- targets
 fdr_mat <- FC_mat
 for (m in targets){
-  FC_mat[, m] <- mast_list[[m]]$logFC[match(interest_df$gene_ID, mast_list[[m]]$geneID)]
-  fdr_mat[, m] <- mast_list[[m]]$FDR[match(interest_df$gene_ID, mast_list[[m]]$geneID)]
+  FC_mat[, m] <- mast_list[[m]]$logFC[match(interest_df$gene_ID, 
+                                            mast_list[[m]]$geneID)]
+  fdr_mat[, m] <- mast_list[[m]]$FDR[match(interest_df$gene_ID, 
+                                           mast_list[[m]]$geneID)]
 }
 ```
 
@@ -403,6 +413,7 @@ Statistical test: hypergeometric test (over-representation test);
 Gene sets: Gene ontology "Biological Process" (non-redundant).
 
 ```{r eval=FALSE}
+## The "WebGestaltR" tool needs Internet connection.
 targets <- names(lfsr_signif_num)[lfsr_signif_num > 0]
 enrich_db <- "geneontology_Biological_Process_noRedundant"
 enrich_res <- list()
@@ -422,8 +433,11 @@ for (i in targets){
 }
 ```
 
-```{r}
+```{r echo=FALSE}
 enrich_res <- readRDS(paste0(data_folder, "GO_enrich_in_GSFA_DEGs_stimulated.rds"))
+```
+
+```{r}
 signif_GO_list <- list()
 for (i in names(enrich_res)) {
   signif_GO_list[[i]] <- enrich_res[[i]] %>%
@@ -453,7 +467,7 @@ for (i in 1:ncol(enrich_table)){
 rownames(enrich_table) <- signif_term_df$description
 ```
 
-```{r select_GO_terms_of_interest}
+```{r select_GO_terms_of_interest, echo=FALSE}
 terms_of_interest <- list()
 
 terms_of_interest[[1]] <-
@@ -506,7 +520,7 @@ terms_of_interest_df <- left_join(terms_of_interest_df, signif_term_df,
                                   by = "description")
 ```
 
-Figure 4C:
+Fold of enrichment for selected GO BP terms (Figure 4C):
 
 ```{r Fig_4C, fig.height=5.5, fig.width=9}
 interest_enrich_table <- enrich_table[terms_of_interest_df$description, ]
@@ -524,3 +538,10 @@ map <- Heatmap(interest_enrich_table,
                width = unit(7, "cm"))
 draw(map, heatmap_legend_side = "right")
 ```
+
+# Session Information
+
+```{r results="markup"}
+sessionInfo()
+```
+

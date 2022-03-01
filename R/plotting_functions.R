@@ -350,8 +350,13 @@ complexplot_gene_perturbation <- function(genes_df, interest_df,
                                           color_break = c("blue3", "blue", "grey90", "red", "red3")){
   interest_df <- interest_df[interest_df$gene_name %in% genes_df$Name, ]
   interest_df$type <- factor(interest_df$type, levels = unique(interest_df$type))
+  if (all(startsWith(rownames(lfsr_mat), "ENSG"))){
+    rownames(lfsr_mat) <- genes_df$Name[match(rownames(lfsr_mat), genes_df$ID)]
+  }
   if (is.null(rownames(effect_mat))){
     rownames(effect_mat) <- genes_df$Name
+  } else if (all(startsWith(rownames(effect_mat), "ENSG"))){
+    rownames(effect_mat) <- genes_df$Name[match(rownames(effect_mat), genes_df$ID)]
   }
   if (is.null(colnames(effect_mat))){
     colnames(effect_mat) <- colnames(lfsr_mat)

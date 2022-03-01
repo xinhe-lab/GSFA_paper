@@ -367,6 +367,20 @@ Deviance residual transformation.<br />
 In addition to the expression matrix, we have a binary perturbation matrix (<span class="math inline">\(G\)</span>) consisting of 21 types (20 genes + negative control) of gene-level KO conditions across cells.</p>
 <p>For Gibbs sampling, we specified 20 factors initialized from truncated SVD. Results were obtained from 4000 iterations, with the posterior mean estimates averaged over the last 1000 iterations.</p>
 <p>The association of <span class="math inline">\(Z\)</span> with <span class="math inline">\(G\)</span> were estimated separately for stimulated and unstimulated cells, generating two effect size matrices, <span class="math inline">\(\beta_1\)</span> and <span class="math inline">\(\beta_0\)</span>, and two <span class="math inline">\(LFSR\)</span> matrices that summarized the effects of perturbations on genes for stimulated and unstimulated cells, respectively.</p>
+<pre class="r"><code>## Load data and plotting functions
+source(&quot;../R/plotting_functions.R&quot;)
+data_folder &lt;- &quot;../data/TCells/&quot;
+
+## Load the lighter GSFA output from &quot;R/run_gsfa_TCells_2groups.R&quot;:
+fit &lt;- readRDS(paste0(data_folder, &quot;gsfa_fit.light.rds&quot;))
+gibbs_PM &lt;- fit$posterior_means
+lfsr_mat1 &lt;- fit$lfsr1[, -ncol(fit$lfsr1)]
+lfsr_mat0 &lt;- fit$lfsr0[, -ncol(fit$lfsr0)]
+
+G_mat &lt;- readRDS(paste0(data_folder, &quot;perturbation_matrix.rds&quot;))
+genes_df &lt;- readRDS(paste0(data_folder, &quot;top6k_genes.rds&quot;))
+interest_df &lt;- readRDS(paste0(data_folder, &quot;selected_tcell_markers.rds&quot;))
+KO_names &lt;- colnames(lfsr_mat1)</code></pre>
 </div>
 </div>
 <div id="factor-perturbation-associations" class="section level1">
@@ -374,16 +388,43 @@ In addition to the expression matrix, we have a binary perturbation matrix (<spa
 <div id="perturbation-effects-on-factors-beta-stimulated-cells" class="section level2">
 <h2><span class="header-section-number">2.1</span> Perturbation effects on factors (<span class="math inline">\(\beta\)</span>) (stimulated cells)</h2>
 <p>All targets and factors (Figure S4A):</p>
+<pre class="r"><code>dotplot_beta_PIP(t(gibbs_PM$Gamma1_pm), t(gibbs_PM$beta1_pm),
+                 marker_names = KO_names,
+                 reorder_markers = c(KO_names[KO_names!=&quot;NonTarget&quot;], &quot;NonTarget&quot;),
+                 inverse_factors = F) +
+  coord_flip()</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/Fig_S4A-1.png" width="864" style="display: block; margin: auto;" /></p>
-<p>Effects of selected perturbations on factors (Figure 3A): <img src="results_notebook_TCells_files/figure-html/Fig_3A-1.png" width="432" style="display: block; margin: auto;" /></p>
+<p>Effects of selected perturbations on factors (Figure 3A):</p>
+<pre class="r"><code>targets &lt;- c(&quot;ARID1A&quot;, &quot;LCP2&quot;, &quot;CD5&quot;, &quot;CBLB&quot;, &quot;RASA2&quot;, &quot;DGKA&quot;, &quot;TCEB2&quot;, &quot;SOCS1&quot;, &quot;CDKN1B&quot;)
+complexplot_perturbation_factor(gibbs_PM$Gamma1_pm[-nrow(gibbs_PM$Gamma1_pm), ],
+                                gibbs_PM$beta1_pm[-nrow(gibbs_PM$beta1_pm), ],
+                                marker_names = KO_names, reorder_markers = targets,
+                                reorder_factors = c(2, 4, 9, 12))</code></pre>
+<p><img src="results_notebook_TCells_files/figure-html/Fig_3A-1.png" width="432" style="display: block; margin: auto;" /></p>
 </div>
 <div id="factor-perturbation-association-p-values-stimulated-cells" class="section level2">
 <h2><span class="header-section-number">2.2</span> Factor-perturbation association p values (stimulated cells)</h2>
+<pre class="r"><code>stim_cells &lt;-
+  (1:nrow(G_mat))[startsWith(rownames(G_mat), &quot;D1S&quot;) | 
+                    startsWith(rownames(G_mat), &quot;D2S&quot;)]
+gibbs_res_tb &lt;- make_gibbs_res_tb(gibbs_PM, G_mat, compute_pve = F,
+                                  cell_indx = stim_cells)
+heatmap_matrix &lt;- gibbs_res_tb %&gt;% select(starts_with(&quot;pval&quot;))
+rownames(heatmap_matrix) &lt;- 1:nrow(heatmap_matrix)
+colnames(heatmap_matrix) &lt;- colnames(G_mat)
+
+summ_pvalues(unlist(heatmap_matrix),
+             title_text = &quot;GSFA Stimulated\n(21 Targets x 20 Factors)&quot;)</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/unnamed-chunk-2-1.png" width="960" style="display: block; margin: auto;" /></p>
 </div>
 <div id="perturbation-effects-on-factors-beta-unstimulated-cells" class="section level2">
 <h2><span class="header-section-number">2.3</span> Perturbation effects on factors (<span class="math inline">\(\beta\)</span>) (unstimulated cells)</h2>
 <p>All targets and factors (Figure S4B):</p>
+<pre class="r"><code>dotplot_beta_PIP(t(gibbs_PM$Gamma0_pm), t(gibbs_PM$beta0_pm),
+                 marker_names = KO_names,
+                 reorder_markers = c(KO_names[KO_names!=&quot;NonTarget&quot;], &quot;NonTarget&quot;),
+                 inverse_factors = F) +
+  coord_flip()</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/Fig_S4B-1.png" width="864" style="display: block; margin: auto;" /></p>
 </div>
 </div>
@@ -391,7 +432,15 @@ In addition to the expression matrix, we have a binary perturbation matrix (<spa
 <h1><span class="header-section-number">3</span> Factor Interpretation</h1>
 <div id="correlation-within-factors" class="section level2">
 <h2><span class="header-section-number">3.1</span> Correlation within factors</h2>
+<pre class="r"><code>plot_pairwise.corr_heatmap(input_mat_1 = gibbs_PM$Z_pm,
+                           corr_type = &quot;pearson&quot;,
+                           name_1 = &quot;Pairwise correlation within factors (Z)&quot;,
+                           label_size = 10)</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/unnamed-chunk-3-1.png" width="672" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>plot_pairwise.corr_heatmap(input_mat_1 = (gibbs_PM$F_pm &gt; 0.95) * 1,
+                           corr_type = &quot;jaccard&quot;,
+                           name_1 = &quot;Pairwise correlation within \nbinarized gene loadings (F_pm &gt; 0.95)&quot;,
+                           label_size = 10)</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/unnamed-chunk-4-1.png" width="672" style="display: block; margin: auto;" /></p>
 </div>
 <div id="gene-loading-in-factors" class="section level2">
@@ -588,8 +637,11 @@ ENSG00000117724
 </table>
 </div>
 <p>All factors (Figure S4C):</p>
+<pre class="r"><code>complexplot_gene_factor(genes_df, interest_df, gibbs_PM$F_pm, gibbs_PM$W_pm)</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/Fig_S4C-1.png" width="816" style="display: block; margin: auto;" /></p>
 <p>Selected factors (Figure 3C):</p>
+<pre class="r"><code>complexplot_gene_factor(genes_df, interest_df, gibbs_PM$F_pm, gibbs_PM$W_pm,
+                        reorder_factors = c(2, 4, 9, 12))</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/Fig_3C-1.png" width="528" style="display: block; margin: auto;" /></p>
 </div>
 <div id="go-enrichment-analysis-in-factors" class="section level2">
@@ -598,10 +650,53 @@ ENSG00000117724
 Background genes: all 6000 genes used in GSFA;<br />
 Statistical test: hypergeometric test (over-representation test);<br />
 Gene sets: Gene ontology &quot;Biological Process&quot; (non-redundant).</p>
+<pre class="r"><code>## The &quot;WebGestaltR&quot; tool needs Internet connection.
+enrich_db &lt;- &quot;geneontology_Biological_Process_noRedundant&quot;
+PIP_mat &lt;- gibbs_PM$F_pm
+enrich_res &lt;- list()
+for (i in 1:ncol(PIP_mat)){
+  enrich_res[[i]] &lt;- 
+    WebGestaltR::WebGestaltR(enrichMethod = &quot;ORA&quot;,
+                             organism = &quot;hsapiens&quot;,
+                             enrichDatabase = enrich_db,
+                             interestGene = genes_df[PIP_mat[, i] &gt; 0.05, ]$ID,
+                             interestGeneType = &quot;ensembl_gene_id&quot;,
+                             referenceGene = genes_df$ID,
+                             referenceGeneType = &quot;ensembl_gene_id&quot;,
+                             isOutput = F)
+}</code></pre>
 <p>Figure 3D:</p>
+<pre class="r"><code>factor_indx &lt;- 2
+terms_of_interest &lt;- c(&quot;kinetochore organization&quot;, &quot;chromosome segregation&quot;,
+                       &quot;cell cycle G2/M phase transition&quot;, &quot;cytokinesis&quot;)
+barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
+                         terms_of_interest = terms_of_interest,
+                         str_wrap_length = 50) +
+  labs(title = paste0(&quot;Factor &quot;, factor_indx))</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/Fig_3D_factor2-1.png" width="672" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>factor_indx &lt;- 9
+terms_of_interest &lt;- c(&quot;microtubule cytoskeleton organization involved in mitosis&quot;,
+                       &quot;chromosome segregation&quot;, &quot;cytokinesis&quot;, &quot;cell cycle checkpoint&quot;)
+barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
+                         terms_of_interest = terms_of_interest,
+                         str_wrap_length = 35) +
+  labs(title = paste0(&quot;Factor &quot;, factor_indx))</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/Fig_3D_factor9-1.png" width="672" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>factor_indx &lt;- 4
+terms_of_interest &lt;- c(&quot;response to chemokine&quot;, &quot;cell killing&quot;, &quot;leukocyte migration&quot;,
+                       &quot;response to interferon-gamma&quot;, &quot;cytokine secretion&quot;)
+barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
+                         terms_of_interest = terms_of_interest,
+                         str_wrap_length = 35) +
+  labs(title = paste0(&quot;Factor &quot;, factor_indx))</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/Fig_3D_factor4-1.png" width="672" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>factor_indx &lt;- 12
+terms_of_interest &lt;- c(&quot;leukocyte cell-cell adhesion&quot;, &quot;extrinsic apoptotic signaling pathway&quot;,
+                       &quot;cell killing&quot;, &quot;T cell activation&quot;, &quot;NIK/NF-kappaB signaling&quot;)
+barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
+                         terms_of_interest = terms_of_interest,
+                         str_wrap_length = 35) +
+  labs(title = paste0(&quot;Factor &quot;, factor_indx))</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/Fig_3D_factor12-1.png" width="672" style="display: block; margin: auto;" /></p>
 </div>
 </div>
@@ -610,6 +705,8 @@ Gene sets: Gene ontology &quot;Biological Process&quot; (non-redundant).</p>
 <p><strong>Here, we compared the DEG results within stimulated cells.</strong></p>
 <div id="number-of-degs-detected-by-different-methods" class="section level2">
 <h2><span class="header-section-number">4.1</span> Number of DEGs detected by different methods</h2>
+<pre class="r"><code>fdr_cutoff &lt;- 0.05
+lfsr_cutoff &lt;- 0.05</code></pre>
 <div style="border: 1px solid #ddd; padding: 5px; overflow-x: scroll; width:100%; ">
 <table class="table" style="margin-left: auto; margin-right: auto;">
 <caption>
@@ -775,7 +872,35 @@ Num_genes
 </tbody>
 </table>
 </div>
+<pre class="r"><code>deseq_list &lt;- readRDS(paste0(data_folder, &quot;DE_result_DESeq2_stimulated.rds&quot;))
+deseq_signif_counts &lt;- sapply(deseq_list, function(x){filter(x, FDR &lt; fdr_cutoff) %&gt;% nrow()})</code></pre>
+<pre class="r"><code>mast_list &lt;- readRDS(paste0(data_folder, &quot;DE_result_MAST_stimulated.rds&quot;))
+mast_signif_counts &lt;- sapply(mast_list, function(x){filter(x, FDR &lt; fdr_cutoff) %&gt;% nrow()})</code></pre>
+<pre class="r"><code>scmageck_res &lt;- readRDS(paste0(data_folder, &quot;DE_result_scMAGeCK_stimulated.rds&quot;))
+colnames(scmageck_res$fdr)[colnames(scmageck_res$fdr) == &quot;NegCtrl&quot;] &lt;- &quot;NonTarget&quot;
+scmageck_signif_counts &lt;- colSums(scmageck_res$fdr[, KO_names] &lt; fdr_cutoff)</code></pre>
+<pre class="r"><code>dge_comparison_df &lt;- data.frame(Perturbation = KO_names,
+                                GSFA = lfsr_signif_num,
+                                scMAGeCK = scmageck_signif_counts,
+                                DESeq2 = deseq_signif_counts,
+                                MAST = mast_signif_counts)
+dge_comparison_df$Perturbation[dge_comparison_df$Perturbation == &quot;NonTarget&quot;] &lt;- &quot;NegCtrl&quot;</code></pre>
 <p>Figure 4A:</p>
+<pre class="r"><code>dge_plot_df &lt;- reshape2::melt(dge_comparison_df, id.var = &quot;Perturbation&quot;,
+                              variable.name = &quot;Method&quot;, value.name = &quot;Num_DEGs&quot;)
+dge_plot_df$Perturbation &lt;- factor(dge_plot_df$Perturbation,
+                                   levels = c(&quot;NegCtrl&quot;, KO_names[KO_names!=&quot;NonTarget&quot;]))
+ggplot(dge_plot_df, aes(x = Perturbation, y = Num_DEGs+1, fill = Method)) +
+  geom_bar(position = &quot;dodge&quot;, stat = &quot;identity&quot;) +
+  geom_text(aes(label = Num_DEGs), position=position_dodge(width=0.9), vjust=-0.25) +
+  scale_y_log10() +
+  scale_fill_brewer(palette = &quot;Set2&quot;) +
+  labs(x = &quot;Target genes&quot;,
+       y = &quot;Number of DEGs&quot;,
+       title = &quot;Number of DEGs detected by different methods&quot;) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        legend.position = &quot;bottom&quot;,
+        legend.text = element_text(size = 13))</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/Fig_4A-1.png" width="1248" style="display: block; margin: auto;" /></p>
 </div>
 <div id="perturbation-effects-on-marker-genes" class="section level2">
@@ -783,21 +908,67 @@ Num_genes
 <div id="gsfa-1" class="section level3">
 <h3><span class="header-section-number">4.2.1</span> GSFA</h3>
 <p>Figure 4D:</p>
+<pre class="r"><code>complexplot_gene_perturbation(genes_df, interest_df,
+                              targets = targets,
+                              lfsr_mat = lfsr_mat1,
+                              effect_mat = gibbs_PM$W_pm %*%
+                                t(gibbs_PM$beta1_pm[-nrow(gibbs_PM$beta1_pm), ]))</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/Fig_4D-1.png" width="528" style="display: block; margin: auto;" /></p>
 </div>
 <div id="scmageck" class="section level3">
 <h3><span class="header-section-number">4.2.2</span> scMAGeCK</h3>
 <p>Figure 4E:</p>
+<pre class="r"><code>score_mat &lt;- scmageck_res$score
+fdr_mat &lt;- scmageck_res$fdr
+complexplot_gene_perturbation(genes_df, interest_df,
+                              targets = targets,
+                              lfsr_mat = fdr_mat, lfsr_name = &quot;FDR&quot;,
+                              effect_mat = score_mat, 
+                              effect_name = &quot;scMAGeCK\nselection score&quot;,
+                              score_break = c(-0.2, 0, 0.2),
+                              color_break = c(&quot;blue3&quot;, &quot;grey90&quot;, &quot;red3&quot;))</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/Fig_4E-1.png" width="528" style="display: block; margin: auto;" /></p>
 </div>
 <div id="deseq2" class="section level3">
 <h3><span class="header-section-number">4.2.3</span> DESeq2</h3>
+<pre class="r"><code>FC_mat &lt;- matrix(nrow = nrow(interest_df), ncol = length(targets))
+rownames(FC_mat) &lt;- interest_df$gene_name
+colnames(FC_mat) &lt;- targets
+fdr_mat &lt;- FC_mat
+for (m in targets){
+  FC_mat[, m] &lt;- deseq_list[[m]]$log2FoldChange[match(interest_df$gene_ID, 
+                                                      deseq_list[[m]]$geneID)]
+  fdr_mat[, m] &lt;- deseq_list[[m]]$FDR[match(interest_df$gene_ID, 
+                                            deseq_list[[m]]$geneID)]
+}</code></pre>
 <p>Figure S4D:</p>
+<pre class="r"><code>complexplot_gene_perturbation(genes_df, interest_df,
+                              targets = targets,
+                              lfsr_mat = fdr_mat, lfsr_name = &quot;FDR&quot;,
+                              effect_mat = FC_mat, effect_name = &quot;DESeq2 log2FC&quot;,
+                              score_break = c(-0.4, 0, 0.4),
+                              color_break = c(&quot;blue3&quot;, &quot;grey90&quot;, &quot;red3&quot;))</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/Fig_S4D-1.png" width="528" style="display: block; margin: auto;" /></p>
 </div>
 <div id="mast" class="section level3">
 <h3><span class="header-section-number">4.2.4</span> MAST</h3>
+<pre class="r"><code>FC_mat &lt;- matrix(nrow = nrow(interest_df), ncol = length(targets))
+rownames(FC_mat) &lt;- interest_df$gene_name
+colnames(FC_mat) &lt;- targets
+fdr_mat &lt;- FC_mat
+for (m in targets){
+  FC_mat[, m] &lt;- mast_list[[m]]$logFC[match(interest_df$gene_ID, 
+                                            mast_list[[m]]$geneID)]
+  fdr_mat[, m] &lt;- mast_list[[m]]$FDR[match(interest_df$gene_ID, 
+                                           mast_list[[m]]$geneID)]
+}</code></pre>
 <p>Figure S4E:</p>
+<pre class="r"><code>complexplot_gene_perturbation(genes_df, interest_df,
+                              targets = targets,
+                              lfsr_mat = fdr_mat, lfsr_name = &quot;FDR&quot;,
+                              effect_mat = FC_mat, effect_name = &quot;MAST logFC&quot;,
+                              score_break = c(-0.4, 0, 0.4),
+                              color_break = c(&quot;blue3&quot;, &quot;grey90&quot;, &quot;red3&quot;))</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/Fig_S4E-1.png" width="528" style="display: block; margin: auto;" /></p>
 </div>
 </div>
@@ -807,9 +978,126 @@ Num_genes
 Background genes: all 6000 genes used in GSFA;<br />
 Statistical test: hypergeometric test (over-representation test);<br />
 Gene sets: Gene ontology &quot;Biological Process&quot; (non-redundant).</p>
-<p>Figure 4C:</p>
+<pre class="r"><code>## The &quot;WebGestaltR&quot; tool needs Internet connection.
+targets &lt;- names(lfsr_signif_num)[lfsr_signif_num &gt; 0]
+enrich_db &lt;- &quot;geneontology_Biological_Process_noRedundant&quot;
+enrich_res &lt;- list()
+for (i in targets){
+  print(i)
+  interest_genes &lt;- genes_df %&gt;% mutate(lfsr = lfsr_mat1[, i]) %&gt;%
+    filter(lfsr &lt; lfsr_cutoff) %&gt;% pull(ID)
+  enrich_res[[i]] &lt;- 
+    WebGestaltR::WebGestaltR(enrichMethod = &quot;ORA&quot;,
+                             organism = &quot;hsapiens&quot;,
+                             enrichDatabase = enrich_db,
+                             interestGene = interest_genes,
+                             interestGeneType = &quot;ensembl_gene_id&quot;,
+                             referenceGene = genes_df$ID,
+                             referenceGeneType = &quot;ensembl_gene_id&quot;,
+                             isOutput = F)
+}</code></pre>
+<pre class="r"><code>signif_GO_list &lt;- list()
+for (i in names(enrich_res)) {
+  signif_GO_list[[i]] &lt;- enrich_res[[i]] %&gt;%
+    dplyr::filter(FDR &lt; 0.05) %&gt;%
+    dplyr::select(geneSet, description, size, enrichmentRatio, pValue) %&gt;%
+    mutate(target = i)
+}
+signif_term_df &lt;- do.call(rbind, signif_GO_list) %&gt;%
+  group_by(geneSet, description, size) %&gt;%
+  summarise(pValue = min(pValue)) %&gt;%
+  ungroup()
+
+abs_FC_colormap &lt;- circlize::colorRamp2(breaks = c(0, 3, 6),
+                                        colors = c(&quot;grey95&quot;, &quot;#77d183&quot;, &quot;#255566&quot;))</code></pre>
+<pre class="r"><code>enrich_table &lt;- data.frame(matrix(nrow = nrow(signif_term_df),
+                                  ncol = length(targets)),
+                           row.names = signif_term_df$geneSet)
+colnames(enrich_table) &lt;- targets
+for (i in 1:ncol(enrich_table)){
+  m &lt;- colnames(enrich_table)[i]
+  enrich_df &lt;- enrich_res[[m]] %&gt;% filter(enrichmentRatio &gt; 2)
+  enrich_table[enrich_df$geneSet, i] &lt;- enrich_df$enrichmentRatio
+}
+rownames(enrich_table) &lt;- signif_term_df$description</code></pre>
+<p>Fold of enrichment for selected GO BP terms (Figure 4C):</p>
+<pre class="r"><code>interest_enrich_table &lt;- enrich_table[terms_of_interest_df$description, ]
+interest_enrich_table[is.na(interest_enrich_table)] &lt;- 0
+
+map &lt;- Heatmap(interest_enrich_table,
+               name = &quot;Fold of enrichment&quot;,
+               col = abs_FC_colormap,
+               row_title = NULL, column_title = NULL,
+               cluster_rows = F, cluster_columns = F,
+               show_row_dend = F, show_column_dend = F,
+               show_heatmap_legend = T,
+               row_names_gp = gpar(fontsize = 10.5),
+               column_names_rot = 45,
+               width = unit(7, &quot;cm&quot;))
+draw(map, heatmap_legend_side = &quot;right&quot;)</code></pre>
 <p><img src="results_notebook_TCells_files/figure-html/Fig_4C-1.png" width="864" style="display: block; margin: auto;" /></p>
 </div>
+</div>
+<div id="session-information" class="section level1">
+<h1><span class="header-section-number">5</span> Session Information</h1>
+<pre class="r"><code>sessionInfo()</code></pre>
+<pre><code>R version 4.0.4 (2021-02-15)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Scientific Linux 7.4 (Nitrogen)
+
+Matrix products: default
+BLAS/LAPACK: /software/openblas-0.3.13-el7-x86_64/lib/libopenblas_haswellp-r0.3.13.so
+
+locale:
+ [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C              
+ [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8    
+ [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8   
+ [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                 
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
+
+attached base packages:
+[1] grid      stats     graphics  grDevices utils     datasets  methods  
+[8] base     
+
+other attached packages:
+ [1] lattice_0.20-41      WebGestaltR_0.4.4    kableExtra_1.3.4    
+ [4] ComplexHeatmap_2.6.2 gridExtra_2.3        forcats_0.5.1       
+ [7] stringr_1.4.0        dplyr_1.0.4          purrr_0.3.4         
+[10] readr_1.4.0          tidyr_1.1.2          tibble_3.0.6        
+[13] ggplot2_3.3.3        tidyverse_1.3.0      Matrix_1.3-2        
+[16] data.table_1.14.0   
+
+loaded via a namespace (and not attached):
+ [1] matrixStats_0.58.0  fs_1.5.0            lubridate_1.7.9.2  
+ [4] doParallel_1.0.16   webshot_0.5.2       RColorBrewer_1.1-2 
+ [7] httr_1.4.2          doRNG_1.8.2         tools_4.0.4        
+[10] backports_1.2.1     bslib_0.2.4         utf8_1.1.4         
+[13] R6_2.5.0            DBI_1.1.1           BiocGenerics_0.36.1
+[16] colorspace_2.0-0    GetoptLong_1.0.5    withr_2.4.1        
+[19] tidyselect_1.1.0    compiler_4.0.4      cli_2.3.1          
+[22] rvest_0.3.6         Cairo_1.5-12.2      xml2_1.3.2         
+[25] labeling_0.4.2      sass_0.3.1          scales_1.1.1       
+[28] apcluster_1.4.8     systemfonts_1.0.1   digest_0.6.27      
+[31] rmarkdown_2.11      svglite_2.0.0       pkgconfig_2.0.3    
+[34] htmltools_0.5.1.1   highr_0.8           dbplyr_2.1.0       
+[37] rlang_0.4.10        GlobalOptions_0.1.2 readxl_1.3.1       
+[40] rstudioapi_0.13     farver_2.0.3        shape_1.4.5        
+[43] jquerylib_0.1.3     generics_0.1.0      jsonlite_1.7.2     
+[46] magrittr_2.0.1      Rcpp_1.0.6          munsell_0.5.0      
+[49] S4Vectors_0.28.1    fansi_0.4.2         lifecycle_1.0.0    
+[52] whisker_0.4         stringi_1.5.3       yaml_2.2.1         
+[55] plyr_1.8.6          parallel_4.0.4      crayon_1.4.1       
+[58] haven_2.3.1         pander_0.6.4        circlize_0.4.12    
+[61] hms_1.0.0           knitr_1.34          pillar_1.5.0       
+[64] igraph_1.2.6        rjson_0.2.20        rngtools_1.5       
+[67] reshape2_1.4.4      codetools_0.2-18    stats4_4.0.4       
+[70] reprex_1.0.0        glue_1.4.2          evaluate_0.14      
+[73] modelr_0.1.8        foreach_1.5.1       png_0.1-7          
+[76] vctrs_0.3.6         cellranger_1.1.0    gtable_0.3.0       
+[79] clue_0.3-58         assertthat_0.2.1    xfun_0.26          
+[82] broom_0.7.5         viridisLite_0.3.0   iterators_1.0.13   
+[85] IRanges_2.24.1      cluster_2.1.0       ellipsis_0.3.1     </code></pre>
 </div>
 
 
