@@ -51,7 +51,12 @@ GSFA produces three main outputs: 1) the association between genetic perturbatio
 * Normal scenarios  
 * Count-based scenarios
 
-## Application on real data
+## LUHMES neural progenitor CROP-seq study
 
-* [LUHMES CROP-seq study](results_notebook_LUHMES.html);  
-* [Primary human CD8+ T cell CROP-seq study](results_notebook_TCells.html);
+* [Preprocessing of CROP-seq data and GSFA application](preprocess_and_gsfa_LUHMES.html);  
+* [GSFA result interpretation](results_notebook_LUHMES.html);  
+
+## Primary human CD8+ T cell CROP-seq study
+
+* [Preprocessing of CROP-seq data and GSFA application](preprocess_and_gsfa_TCells.html);  
+* [GSFA result interpretation](results_notebook_TCells.html);

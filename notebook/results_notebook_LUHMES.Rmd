@@ -2,7 +2,6 @@
 title: "GSFA Results of LUHMES CROP-seq Data"
 subtitle: "-- for manuscript"
 author: "Yifan Zhou (zhouyf@uchicago.edu)"
-date: '`r format(Sys.time(), "%Y-%m")`'
 output:
   html_document:
     number_sections: yes
@@ -46,26 +45,12 @@ pander::panderOptions("table.split.table", Inf)
 
 # Background
 
-## Input data and pre-processing
+Original CROP-seq study:   
+[High-throughput single-cell functional elucidation of neurodevelopmental disease-associated genes reveals convergent mechanisms altering neuronal differentiation](https://genome.cshlp.org/content/30/9/1317.full)
 
-Source:   
-[High-throughput single-cell functional elucidation of neurodevelopmental disease-associated genes reveals convergent mechanisms altering neuronal differentiation](https://genome.cshlp.org/content/30/9/1317.full), GEO accession: GSE142078.
+The study targeted 14 neurodevelopmental genes, including 13 autism risk genes, with CRISPR knock-down in Lund human mesencephalic (LUHMES) neural progenitor cells. The overall goal is to understand the effects of these target genes on neuronal differentiation.
 
-Perturbations:    
-CRISPR knock-down of 14 autism spectrum disorder (ASD)–associated genes (3 gRNAs per gene) + 5 non-targeting gRNAs.
-
-Cells:    
-Lund human mesencephalic (LUHMES) neural progenitor cell line.   
-Cells from 3 batches were merged together into 1 analysis. All cells have only a single type of gRNA readout. Quality control resulted in 8708 cells.
-
-Genes:    
-**Top 6000 genes ranked by the multinomial deviance statistics were kept.**
-
-Normalization:    
-Deviance residual transformation.   
-**Batch effect, unique UMI count, library size, and mitochondria percentage were all corrected for. The corrected and scaled expression data were used as input for subsequent GSFA.**
-
-## GSFA
+# GSFA
 
 Input:    
 In addition to the expression matrix, we have a binary perturbation matrix ($G$) consisting of 15 types (14 genes + negative control) of gene-level knock-down conditions across cells.

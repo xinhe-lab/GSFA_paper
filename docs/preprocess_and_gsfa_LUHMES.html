@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="Yifan Zhou (zhouyf@uchicago.edu)" />
+
+
+<title>Application of GSFA on LUHMES CROP-seq Data</title>
+
+<script src="site_libs/jquery-3.5.1/jquery-3.5.1.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/flatly.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="site_libs/jqueryui-1.11.4/jquery-ui.min.js"></script>
+<link href="site_libs/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="site_libs/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<link href="site_libs/highlightjs-9.12.0/textmate.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+<style type="text/css">
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #adb5bd;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script type="text/javascript">
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark it active
+  menuAnchor.tab('show');
+
+  // if it's got a parent navbar menu mark it active as well
+  menuAnchor.closest('li.dropdown').addClass('active');
+
+  // Navbar adjustments
+  var navHeight = $(".navbar").first().height() + 15;
+  var style = document.createElement('style');
+  var pt = "padding-top: " + navHeight + "px; ";
+  var mt = "margin-top: -" + navHeight + "px; ";
+  var css = "";
+  // offset scroll position for anchor links (for fixed navbar)
+  for (var i = 1; i <= 6; i++) {
+    css += ".section h" + i + "{ " + pt + mt + "}\n";
+  }
+  style.innerHTML = "body {" + pt + "padding-bottom: 40px; }\n" + css;
+  document.head.appendChild(style);
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "&#xe258;";
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">GSFA</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Home</a>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Application of GSFA on LUHMES CROP-seq Data</h1>
+<h3 class="subtitle">-- for manuscript</h3>
+<h4 class="author">Yifan Zhou (<a href="mailto:zhouyf@uchicago.edu">zhouyf@uchicago.edu</a>)</h4>
+
+</div>
+
+
+<div id="introduction" class="section level1">
+<h1><span class="header-section-number">1</span> Introduction</h1>
+<p>This tutorial describes the preprocessing of single-cell CRISPR screen (CROP-seq) dataset in <a href="https://genome.cshlp.org/content/30/9/1317.full">Lalli et al.</a>, and how to run GSFA on the processed data.</p>
+<p>Due to the size of data, we recommend running the code in this tutorial in an R script instead of in R markdown.</p>
+<div id="necessary-packages" class="section level2">
+<h2><span class="header-section-number">1.1</span> Necessary packages</h2>
+<pre class="r"><code>library(data.table)
+library(tidyverse)
+library(Matrix)
+library(Seurat)
+library(GSFA)
+library(ggplot2)</code></pre>
+</div>
+<div id="original-study-and-data-source" class="section level2">
+<h2><span class="header-section-number">1.2</span> Original study and data source</h2>
+<p>Original CROP-seq study:<br />
+High-throughput single-cell functional elucidation of neurodevelopmental disease-associated genes reveals convergent mechanisms altering neuronal differentiation. Genome Res. (2020).</p>
+<p>Data source:<br />
+GEO accession: <a href="https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE142078">GSE142078</a>, <code>GSE142078_RAW.tar</code> file.</p>
+<p>The study targeted 14 neurodevelopmental genes, including 13 autism risk genes, with CRISPR knock-down in Lund human mesencephalic (LUHMES) neural progenitor cells. The overall goal is to understand the effects of these target genes on the transcriptome and on the process of neuronal differentiation.</p>
+</div>
+</div>
+<div id="preprocessing-of-crop-seq-data" class="section level1">
+<h1><span class="header-section-number">2</span> Preprocessing of CROP-seq data</h1>
+<div id="merge-experimental-batches" class="section level2">
+<h2><span class="header-section-number">2.1</span> Merge experimental batches</h2>
+<p>The original data came in three batches, each in standard <code>cellranger</code> single-cell RNA-seq output format. Below is the code to merge all batches of cells together into one dataset.</p>
+<p>Meanwhile, each cell is also assigned its CRISPR perturbation target based the gRNA readout. Although each gene was targeted by 3 gRNAs, and 5 non-targeting gRNAs were designed as negative control, only gene-level perturbations are assigned to cells, resulting in 15 (14 genes + negative control) perturbation groups in total.<br />
+(Each cell contains a unique gRNA, so the assignment is straight-forward.)</p>
+<pre class="r"><code>## Change the following directory to where the downloaded data is:
+data_dir &lt;- &quot;/project2/xinhe/yifan/Factor_analysis/LUHMES/GSE142078_raw/&quot;
+
+filename_tb &lt;- data.frame(experiment = c(&quot;Run1&quot;, &quot;Run2&quot;, &quot;Run3&quot;),
+                          prefix = c(&quot;GSM4219575_Run1&quot;, &quot;GSM4219576_Run2&quot;, &quot;GSM4219577_Run3&quot;),
+                          stringsAsFactors = F)
+seurat_lst &lt;- list()
+guide_lst &lt;- list()
+for (i in 1:3){
+  experiment &lt;- filename_tb$experiment[i]
+  prefix &lt;- filename_tb$prefix[i]
+  cat(paste0(&quot;Loading data of &quot;, experiment, &quot; ...&quot;))
+  cat(&quot;\n\n&quot;)
+  feature.names &lt;- data.frame(fread(paste0(data_dir, prefix, &quot;_genes.tsv.gz&quot;),
+                                    header = FALSE), stringsAsFactors = FALSE)
+  barcode.names &lt;- data.frame(fread(paste0(data_dir, prefix, &quot;_barcodes.tsv.gz&quot;),
+                                    header = FALSE), stringsAsFactors = FALSE)
+  barcode.names$V2 &lt;- sapply(strsplit(barcode.names$V1, split = &quot;-&quot;),
+                             function(x){x[1]})
+  # Load the gene count matrix (gene x cell) and annotate the dimension names:
+  dm &lt;- readMM(file = paste0(data_dir, prefix, &quot;_matrix.mtx.gz&quot;))
+  rownames(dm) &lt;- feature.names$V1
+  colnames(dm) &lt;- barcode.names$V2
+  
+  # Load the meta data of cells:
+  metadata &lt;- data.frame(fread(paste0(data_dir, prefix, &quot;_Cell_Guide_Lookup.csv.gz&quot;),
+                               header = T, sep = &#39;,&#39;), check.names = F)
+  metadata$target &lt;- sapply(strsplit(metadata$sgRNA, split = &quot;_&quot;),
+                            function(x){x[1]})
+  metadata &lt;- metadata %&gt;% filter(CellBarcode %in% barcode.names$V2)
+  targets &lt;- unique(metadata$target)
+  targets &lt;- targets[order(targets)]
+  
+  # Make a cell by perturbation matrix:
+  guide_mat &lt;- data.frame(matrix(nrow = nrow(metadata),
+                                 ncol = length(targets)))
+  rownames(guide_mat) &lt;- metadata$CellBarcode
+  colnames(guide_mat) &lt;- targets
+  for (i in targets){
+    guide_mat[[i]] &lt;- (metadata$target == i) * 1
+  }
+  guide_lst[[experiment]] &lt;- guide_mat
+  
+  # Only keep cells with gRNA info:
+  dm.cells_w_gRNA &lt;- dm[, metadata$CellBarcode]
+  real_gene_bool &lt;- startsWith(rownames(dm.cells_w_gRNA), &quot;ENSG&quot;)
+  dm.cells_w_gRNA &lt;- dm.cells_w_gRNA[real_gene_bool, ]
+  cat(&quot;Dimensions of the final gene expression matrix: &quot;)
+  cat(dim(dm.cells_w_gRNA))
+  cat(&quot;\n\n&quot;)
+  
+  dm.seurat &lt;- CreateSeuratObject(dm.cells_w_gRNA, project = paste0(&quot;LUHMES_&quot;, experiment))
+  dm.seurat &lt;- AddMetaData(dm.seurat, metadata = guide_mat)
+  seurat_lst[[experiment]] &lt;- dm.seurat
+}</code></pre>
+<p>Loading data of Run1 ...</p>
+<p>Dimensions of the final gene expression matrix: 33694 4336</p>
+<p>Loading data of Run2 ...</p>
+<p>Dimensions of the final gene expression matrix: 33694 2436</p>
+<p>Loading data of Run3 ...</p>
+<p>Dimensions of the final gene expression matrix: 33694 2071</p>
+<pre class="r"><code>combined_obj &lt;- merge(seurat_lst[[1]], c(seurat_lst[[2]], seurat_lst[[3]]),
+                      add.cell.ids = c(&quot;Run1&quot;, &quot;Run2&quot;, &quot;Run3&quot;),
+                      project = &quot;LUHMES&quot;)</code></pre>
+<p>Numbers of cells and genes in the merged gene expression matrix:</p>
+<pre class="r"><code>dim(combined_obj)</code></pre>
+<p>[1] 33694 8843</p>
+</div>
+<div id="quality-control" class="section level2">
+<h2><span class="header-section-number">2.2</span> Quality control</h2>
+<p>Next, Seurat is used to filter cells with a library size &gt; 20000 or more than 10% of total read counts from mitochondria genes.</p>
+<p>The violin plots show the distributions of unique UMI count, library size, and mitochondria gene percentage in cells from each batch.</p>
+<pre class="r"><code>MT_genes &lt;- feature.names %&gt;% filter(startsWith(V2, &quot;MT-&quot;)) %&gt;% pull(V1)
+combined_obj[[&#39;percent_mt&#39;]] &lt;- PercentageFeatureSet(combined_obj, 
+                                                     features = MT_genes)
+combined_obj &lt;- subset(combined_obj, 
+                       subset = percent_mt &lt; 10 &amp; nCount_RNA &lt; 20000)
+VlnPlot(combined_obj, 
+        features = c(&#39;nFeature_RNA&#39;, &#39;nCount_RNA&#39;, &#39;percent_mt&#39;), 
+        pt.size = 0)</code></pre>
+<p><img src="preprocess_and_gsfa_LUHMES_files/figure-html/seurat-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>Numbers of cells and genes after QC:</p>
+<pre class="r"><code>dim(combined_obj)</code></pre>
+<p>[1] 33694 8708</p>
+</div>
+<div id="deviance-residual-transformation" class="section level2">
+<h2><span class="header-section-number">2.3</span> Deviance residual transformation</h2>
+<p>To accommodate the application of GSFA, we adopt the transformation proposed in <a href="https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1861-6">Townes et al.</a>, and convert the scRNA-seq count data into deviance residuals, a continuous quantity analogous to z-scores that approximately follows a normal distribution.</p>
+<p>The deviance residual transformation overcomes some problems of the commonly used log transformation of read counts, and has been shown to improve downstream analyses, such as feature selection and clustering.</p>
+<p>In the following, we used the <code>deviance_residual_transform</code> function in <code>GSFA</code> to perform the tranformation.<br />
+<strong>Due to the size of the data, this process can take up to several hours, and should be run in an R script separately.</strong></p>
+<pre class="r"><code>dev_res &lt;- deviance_residual_transform(t(as.matrix(combined_obj@assays$RNA@counts)))</code></pre>
+</div>
+<div id="feature-selection" class="section level2">
+<h2><span class="header-section-number">2.4</span> Feature selection</h2>
+<p>Genes with constant expression across cells are not informative and will have a deviance of 0, while genes that vary across cells in expression will have a larger deviance.</p>
+<p>Therefore, one can pick the genes with high deviance as an alternative to selecting highly variable genes, with the advantage that the selection is not sensitive to normalization.</p>
+<p>Here we select the top 6000 genes ranked by deviance statistics, and downsize the gene expression matrix.</p>
+<pre class="r"><code>top_gene_index &lt;- select_top_devres_genes(dev_res, num_top_genes = 6000)
+dev_res_filtered &lt;- dev_res[, top_gene_index]</code></pre>
+</div>
+<div id="covariate-removal" class="section level2">
+<h2><span class="header-section-number">2.5</span> Covariate removal</h2>
+<p>We further regressed out the differences in experimental batch, unique UMI count, library size, and percentage of mitochondrial gene expression.</p>
+<pre class="r"><code>covariate_df &lt;- data.frame(batch = factor(combined_obj$orig.ident),
+                           lib_size = combined_obj$nCount_RNA,
+                           umi_count = combined_obj$nFeature_RNA,
+                           percent_mt = combined_obj$percent_mt)
+dev_res_corrected &lt;- covariate_removal(dev_res_filtered, covariate_df)
+
+scaled.gene_exp &lt;- scale(dev_res_corrected)</code></pre>
+</div>
+<div id="inputs-for-gsfa" class="section level2">
+<h2><span class="header-section-number">2.6</span> Inputs for GSFA</h2>
+<p>The corrected and scaled gene expression matrix (8708 cells by 6000 genes) will be used as input for GSFA <code>fit_gsfa_multivar</code> argument <span class="math inline">\(Y\)</span>. We annonate this matrix with cell and gene names so we can keep track.</p>
+<pre class="r"><code>sample_names &lt;- colnames(combined_obj@assays$RNA@counts)
+gene_names &lt;- rownames(combined_obj@assays$RNA@counts)
+rownames(scaled.gene_exp) &lt;- sample_names
+colnames(scaled.gene_exp) &lt;- gene_names[top_gene_index]</code></pre>
+<p>In addition, we have a cell by perturbation matrix containing gene-level perturbation conditions across cells for GSFA <code>fit_gsfa_multivar</code> argument <span class="math inline">\(G\)</span>:</p>
+<pre class="r"><code>G_mat &lt;- combined_obj@meta.data[, 4:18]
+G_mat &lt;- as.matrix(G_mat)</code></pre>
+<p>Here is the number of cells under each gene-level perturbation:</p>
+<pre class="r"><code>num_cells &lt;- colSums(G_mat)
+num_cells_df &lt;- data.frame(locus = names(num_cells),
+                           count = num_cells)
+ggplot(data = num_cells_df, aes(x=locus, y=count)) +
+  geom_bar(stat = &quot;identity&quot;, width = 0.6) +
+  labs(x = &quot;Perturbation&quot;,
+       y = &quot;Number of cells&quot;) +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size =11),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        panel.grid.minor = element_blank())</code></pre>
+<p><img src="preprocess_and_gsfa_LUHMES_files/figure-html/num_cells-1.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+</div>
+<div id="gsfa" class="section level1">
+<h1><span class="header-section-number">3</span> GSFA</h1>
+<p>Now that we have the two inputs we need, we can perform GSFA (guided sparse factor analysis) on the data.</p>
+<p>Below we specify 20 factors initialized from truncated SVD and run Gibbs sampling for 3000 iterations, with the posterior mean estimates computed over the last 1000 iterations of samples.</p>
+<p><strong>This process is both time and memory intensive, and should be run in an R script separately, preferably on a high performance computing cluster that can guarantee 30GB memory and 3.5 (typically ~3) hours of runtime without interruption.</strong></p>
+<pre class="r"><code>set.seed(14314)
+fit &lt;- fit_gsfa_multivar(Y = scaled.gene_exp, G = G_mat, 
+                         K = 20,
+                         prior_type = &quot;mixture_normal&quot;, 
+                         init.method = &quot;svd&quot;,
+                         niter = 3000, used_niter = 1000,
+                         verbose = T, return_samples = T)</code></pre>
+<p>More options for running GSFA are available in the <code>R/run_gsfa_LUHMES</code> script. For example, one can run Gibbs sampling in segments and restart from a previous run if limited computational resources are available.</p>
+</div>
+<div id="session-information" class="section level1">
+<h1><span class="header-section-number">4</span> Session information</h1>
+<pre class="r"><code>sessionInfo()</code></pre>
+<pre><code>R version 4.0.4 (2021-02-15)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Scientific Linux 7.4 (Nitrogen)
+
+Matrix products: default
+BLAS/LAPACK: /software/openblas-0.3.13-el7-x86_64/lib/libopenblas_haswellp-r0.3.13.so
+
+locale:
+ [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C              
+ [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8    
+ [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8   
+ [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                 
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+ [1] GSFA_0.2.6         SeuratObject_4.0.0 Seurat_4.0.1       Matrix_1.3-2      
+ [5] forcats_0.5.1      stringr_1.4.0      dplyr_1.0.4        purrr_0.3.4       
+ [9] readr_1.4.0        tidyr_1.1.2        tibble_3.0.6       ggplot2_3.3.3     
+[13] tidyverse_1.3.0    data.table_1.14.0 
+
+loaded via a namespace (and not attached):
+  [1] Rtsne_0.15            colorspace_2.0-0      deldir_0.2-10        
+  [4] ellipsis_0.3.1        ggridges_0.5.3        fs_1.5.0             
+  [7] spatstat.data_2.1-0   rstudioapi_0.13       farver_2.0.3         
+ [10] leiden_0.3.7          listenv_0.8.0         ggrepel_0.9.1        
+ [13] fansi_0.4.2           lubridate_1.7.9.2     xml2_1.3.2           
+ [16] R.methodsS3_1.8.1     codetools_0.2-18      splines_4.0.4        
+ [19] knitr_1.34            polyclip_1.10-0       jsonlite_1.7.2       
+ [22] broom_0.7.5           ica_1.0-2             cluster_2.1.0        
+ [25] dbplyr_2.1.0          R.oo_1.24.0           png_0.1-7            
+ [28] uwot_0.1.10           spatstat.sparse_2.0-0 shiny_1.6.0          
+ [31] sctransform_0.3.2     compiler_4.0.4        httr_1.4.2           
+ [34] backports_1.2.1       lazyeval_0.2.2        assertthat_0.2.1     
+ [37] fastmap_1.1.0         cli_2.3.1             later_1.1.0.1        
+ [40] htmltools_0.5.1.1     tools_4.0.4           igraph_1.2.6         
+ [43] gtable_0.3.0          glue_1.4.2            RANN_2.6.1           
+ [46] reshape2_1.4.4        Rcpp_1.0.6            scattermore_0.7      
+ [49] cellranger_1.1.0      jquerylib_0.1.3       vctrs_0.3.6          
+ [52] nlme_3.1-152          lmtest_0.9-38         xfun_0.26            
+ [55] globals_0.14.0        rvest_0.3.6           mime_0.10            
+ [58] miniUI_0.1.1.1        lifecycle_1.0.0       irlba_2.3.3          
+ [61] goftest_1.2-2         future_1.21.0         MASS_7.3-53          
+ [64] zoo_1.8-8             scales_1.1.1          spatstat.core_2.0-0  
+ [67] spatstat.utils_2.1-0  hms_1.0.0             promises_1.2.0.1     
+ [70] parallel_4.0.4        RColorBrewer_1.1-2    yaml_2.2.1           
+ [73] reticulate_1.18       pbapply_1.4-3         gridExtra_2.3        
+ [76] pander_0.6.4          sass_0.3.1            rpart_4.1-15         
+ [79] stringi_1.5.3         highr_0.8             rlang_0.4.10         
+ [82] pkgconfig_2.0.3       matrixStats_0.58.0    evaluate_0.14        
+ [85] lattice_0.20-41       tensor_1.5            ROCR_1.0-11          
+ [88] labeling_0.4.2        htmlwidgets_1.5.3     patchwork_1.1.1      
+ [91] cowplot_1.1.1         tidyselect_1.1.0      parallelly_1.23.0    
+ [94] RcppAnnoy_0.0.18      plyr_1.8.6            magrittr_2.0.1       
+ [97] R6_2.5.0              generics_0.1.0        DBI_1.1.1            
+[100] mgcv_1.8-33           pillar_1.5.0          haven_2.3.1          
+[103] withr_2.4.1           fitdistrplus_1.1-3    abind_1.4-5          
+[106] survival_3.2-7        future.apply_1.7.0    modelr_0.1.8         
+[109] crayon_1.4.1          KernSmooth_2.23-18    utf8_1.1.4           
+[112] spatstat.geom_2.0-1   plotly_4.9.3          rmarkdown_2.11       
+[115] grid_4.0.4            readxl_1.3.1          reprex_1.0.0         
+[118] digest_0.6.27         xtable_1.8-4          httpuv_1.5.5         
+[121] R.utils_2.11.0        munsell_0.5.0         viridisLite_0.3.0    
+[124] bslib_0.2.4          </code></pre>
+</div>
+
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+<script>
+$(document).ready(function ()  {
+
+    // temporarily add toc-ignore selector to headers for the consistency with Pandoc
+    $('.unlisted.unnumbered').addClass('toc-ignore')
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_');
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

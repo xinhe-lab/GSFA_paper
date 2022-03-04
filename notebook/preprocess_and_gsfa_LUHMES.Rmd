@@ -1,0 +1,254 @@
+---
+title: "Application of GSFA on LUHMES CROP-seq Data"
+subtitle: "-- for manuscript"
+author: "Yifan Zhou (zhouyf@uchicago.edu)"
+output:
+  html_document:
+    number_sections: yes
+    toc: yes
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+requireNamespace("pander", quietly = TRUE)
+# set default chunk output
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      comment = NA,
+                      tidy = FALSE,
+                      fig.width = 7,
+                      fig.height = 5,
+                      fig.align = "center",
+                      results = "asis")
+
+# formatting of pander tables
+pander::panderOptions('knitr.auto.asis', FALSE)
+pander::panderOptions("table.split.table", Inf)
+```
+
+# Introduction
+
+This tutorial describes the preprocessing of single-cell CRISPR screen (CROP-seq) dataset in [Lalli et al.](https://genome.cshlp.org/content/30/9/1317.full), and how to run GSFA on the processed data.
+
+Due to the size of data, we recommend running the code in this tutorial in an R script instead of in R markdown.
+
+## Necessary packages
+
+```{r}
+library(data.table)
+library(tidyverse)
+library(Matrix)
+library(Seurat)
+library(GSFA)
+library(ggplot2)
+```
+
+## Original study and data source
+
+Original CROP-seq study:   
+High-throughput single-cell functional elucidation of neurodevelopmental disease-associated genes reveals convergent mechanisms altering neuronal differentiation. Genome Res. (2020).
+
+Data source:  
+GEO accession: [GSE142078](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE142078), `GSE142078_RAW.tar` file.
+
+The study targeted 14 neurodevelopmental genes, including 13 autism risk genes, with CRISPR knock-down in Lund human mesencephalic (LUHMES) neural progenitor cells. The overall goal is to understand the effects of these target genes on the transcriptome and on the process of neuronal differentiation.
+
+# Preprocessing of CROP-seq data
+
+## Merge experimental batches
+
+The original data came in three batches, each in standard `cellranger` single-cell RNA-seq output format. Below is the code to merge all batches of cells together into one dataset.
+
+Meanwhile, each cell is also assigned its CRISPR perturbation target based the gRNA readout. Although each gene was targeted by 3 gRNAs, and 5 non-targeting gRNAs were designed as negative control, only gene-level perturbations are assigned to cells, resulting in 15 (14 genes + negative control) perturbation groups in total.  
+(Each cell contains a unique gRNA, so the assignment is straight-forward.)
+
+```{r}
+## Change the following directory to where the downloaded data is:
+data_dir <- "/project2/xinhe/yifan/Factor_analysis/LUHMES/GSE142078_raw/"
+
+filename_tb <- data.frame(experiment = c("Run1", "Run2", "Run3"),
+                          prefix = c("GSM4219575_Run1", "GSM4219576_Run2", "GSM4219577_Run3"),
+                          stringsAsFactors = F)
+seurat_lst <- list()
+guide_lst <- list()
+for (i in 1:3){
+  experiment <- filename_tb$experiment[i]
+  prefix <- filename_tb$prefix[i]
+  cat(paste0("Loading data of ", experiment, " ..."))
+  cat("\n\n")
+  feature.names <- data.frame(fread(paste0(data_dir, prefix, "_genes.tsv.gz"),
+                                    header = FALSE), stringsAsFactors = FALSE)
+  barcode.names <- data.frame(fread(paste0(data_dir, prefix, "_barcodes.tsv.gz"),
+                                    header = FALSE), stringsAsFactors = FALSE)
+  barcode.names$V2 <- sapply(strsplit(barcode.names$V1, split = "-"),
+                             function(x){x[1]})
+  # Load the gene count matrix (gene x cell) and annotate the dimension names:
+  dm <- readMM(file = paste0(data_dir, prefix, "_matrix.mtx.gz"))
+  rownames(dm) <- feature.names$V1
+  colnames(dm) <- barcode.names$V2
+  
+  # Load the meta data of cells:
+  metadata <- data.frame(fread(paste0(data_dir, prefix, "_Cell_Guide_Lookup.csv.gz"),
+                               header = T, sep = ','), check.names = F)
+  metadata$target <- sapply(strsplit(metadata$sgRNA, split = "_"),
+                            function(x){x[1]})
+  metadata <- metadata %>% filter(CellBarcode %in% barcode.names$V2)
+  targets <- unique(metadata$target)
+  targets <- targets[order(targets)]
+  
+  # Make a cell by perturbation matrix:
+  guide_mat <- data.frame(matrix(nrow = nrow(metadata),
+                                 ncol = length(targets)))
+  rownames(guide_mat) <- metadata$CellBarcode
+  colnames(guide_mat) <- targets
+  for (i in targets){
+    guide_mat[[i]] <- (metadata$target == i) * 1
+  }
+  guide_lst[[experiment]] <- guide_mat
+  
+  # Only keep cells with gRNA info:
+  dm.cells_w_gRNA <- dm[, metadata$CellBarcode]
+  real_gene_bool <- startsWith(rownames(dm.cells_w_gRNA), "ENSG")
+  dm.cells_w_gRNA <- dm.cells_w_gRNA[real_gene_bool, ]
+  cat("Dimensions of the final gene expression matrix: ")
+  cat(dim(dm.cells_w_gRNA))
+  cat("\n\n")
+  
+  dm.seurat <- CreateSeuratObject(dm.cells_w_gRNA, project = paste0("LUHMES_", experiment))
+  dm.seurat <- AddMetaData(dm.seurat, metadata = guide_mat)
+  seurat_lst[[experiment]] <- dm.seurat
+}
+
+combined_obj <- merge(seurat_lst[[1]], c(seurat_lst[[2]], seurat_lst[[3]]),
+                      add.cell.ids = c("Run1", "Run2", "Run3"),
+                      project = "LUHMES")
+```
+
+Numbers of cells and genes in the merged gene expression matrix:
+```{r}
+dim(combined_obj)
+```
+
+## Quality control
+
+Next, Seurat is used to filter cells with a library size > 20000 or more than 10% of total read counts from mitochondria genes.
+
+The violin plots show the distributions of unique UMI count, library size, and mitochondria gene percentage in cells from each batch.
+
+```{r seurat}
+MT_genes <- feature.names %>% filter(startsWith(V2, "MT-")) %>% pull(V1)
+combined_obj[['percent_mt']] <- PercentageFeatureSet(combined_obj, 
+                                                     features = MT_genes)
+combined_obj <- subset(combined_obj, 
+                       subset = percent_mt < 10 & nCount_RNA < 20000)
+VlnPlot(combined_obj, 
+        features = c('nFeature_RNA', 'nCount_RNA', 'percent_mt'), 
+        pt.size = 0)
+```
+
+Numbers of cells and genes after QC:
+```{r}
+dim(combined_obj)
+```
+
+## Deviance residual transformation
+
+To accommodate the application of GSFA, we adopt the transformation proposed in [Townes et al.](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1861-6), and convert the scRNA-seq count data into deviance residuals, a continuous quantity analogous to z-scores that approximately follows a normal distribution.
+
+The deviance residual transformation overcomes some problems of the commonly used log transformation of read counts, and has been shown to improve downstream analyses, such as feature selection and clustering.
+
+In the following, we used the `deviance_residual_transform` function in `GSFA` to perform the tranformation.  
+**Due to the size of the data, this process can take up to several hours, and should be run in an R script separately.**
+
+```{r dev_res_transform, eval=FALSE}
+dev_res <- deviance_residual_transform(t(as.matrix(combined_obj@assays$RNA@counts)))
+```
+
+## Feature selection
+
+Genes with constant expression across cells are not informative and will have a deviance of 0, while genes that vary across cells in expression will have a larger deviance. 
+
+Therefore, one can pick the genes with high deviance as an alternative to selecting highly variable genes, with the advantage that the selection is not sensitive to normalization.
+
+Here we select the top 6000 genes ranked by deviance statistics, and downsize the gene expression matrix.
+
+```{r top_gene_selection, eval=FALSE}
+top_gene_index <- select_top_devres_genes(dev_res, num_top_genes = 6000)
+dev_res_filtered <- dev_res[, top_gene_index]
+```
+
+## Covariate removal
+
+We further regressed out the differences in experimental batch, unique UMI count, library size, and percentage of mitochondrial gene expression.
+
+```{r covar_removal, eval=FALSE}
+covariate_df <- data.frame(batch = factor(combined_obj$orig.ident),
+                           lib_size = combined_obj$nCount_RNA,
+                           umi_count = combined_obj$nFeature_RNA,
+                           percent_mt = combined_obj$percent_mt)
+dev_res_corrected <- covariate_removal(dev_res_filtered, covariate_df)
+
+scaled.gene_exp <- scale(dev_res_corrected)
+```
+
+## Inputs for GSFA
+
+The corrected and scaled gene expression matrix (8708 cells by 6000 genes) will be used as input for GSFA `fit_gsfa_multivar` argument $Y$. We annonate this matrix with cell and gene names so we can keep track.
+
+```{r eval=FALSE}
+sample_names <- colnames(combined_obj@assays$RNA@counts)
+gene_names <- rownames(combined_obj@assays$RNA@counts)
+rownames(scaled.gene_exp) <- sample_names
+colnames(scaled.gene_exp) <- gene_names[top_gene_index]
+```
+
+In addition, we have a cell by perturbation matrix containing gene-level perturbation conditions across cells for GSFA `fit_gsfa_multivar` argument $G$:
+
+```{r}
+G_mat <- combined_obj@meta.data[, 4:18]
+G_mat <- as.matrix(G_mat)
+```
+
+Here is the number of cells under each gene-level perturbation: 
+
+```{r num_cells}
+num_cells <- colSums(G_mat)
+num_cells_df <- data.frame(locus = names(num_cells),
+                           count = num_cells)
+ggplot(data = num_cells_df, aes(x=locus, y=count)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  labs(x = "Perturbation",
+       y = "Number of cells") +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size =11),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        panel.grid.minor = element_blank())
+```
+
+# GSFA
+
+Now that we have the two inputs we need, we can perform GSFA (guided sparse factor analysis) on the data.
+
+Below we specify 20 factors initialized from truncated SVD and run Gibbs sampling for 3000 iterations, with the posterior mean estimates computed over the last 1000 iterations of samples.
+
+**This process is both time and memory intensive, and should be run in an R script separately, preferably on a high performance computing cluster that can guarantee 30GB memory and 3.5 (typically ~3) hours of runtime without interruption.**
+
+```{r eval=FALSE}
+set.seed(14314)
+fit <- fit_gsfa_multivar(Y = scaled.gene_exp, G = G_mat, 
+                         K = 20,
+                         prior_type = "mixture_normal", 
+                         init.method = "svd",
+                         niter = 3000, used_niter = 1000,
+                         verbose = T, return_samples = T)
+```
+
+More options for running GSFA are available in the `R/run_gsfa_LUHMES` script. For example, one can run Gibbs sampling in segments and restart from a previous run if limited computational resources are available.
+
+# Session information
+
+```{r results="markup"}
+sessionInfo()
+```
