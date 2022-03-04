@@ -358,7 +358,7 @@ library(ggplot2)</code></pre>
 High-throughput single-cell functional elucidation of neurodevelopmental disease-associated genes reveals convergent mechanisms altering neuronal differentiation. Genome Res. (2020).</p>
 <p>Data source:<br />
 GEO accession: <a href="https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE142078">GSE142078</a>, <code>GSE142078_RAW.tar</code> file.</p>
-<p>The study targeted 14 neurodevelopmental genes, including 13 autism risk genes, with CRISPR knock-down in Lund human mesencephalic (LUHMES) neural progenitor cells. The overall goal is to understand the effects of these target genes on the transcriptome and on the process of neuronal differentiation.</p>
+<p>The study targeted 14 neurodevelopmental genes, including 13 autism risk genes, with CRISPR knock-down in Lund human mesencephalic (LUHMES) neural progenitor cells. After CRISPR targeting, the cells were differentiated into postmitotic neurons and sequenced. The overall goal is to understand the effects of these target genes on the transcriptome and on the process of neuronal differentiation.</p>
 </div>
 </div>
 <div id="preprocessing-of-crop-seq-data" class="section level1">
@@ -518,7 +518,7 @@ fit &lt;- fit_gsfa_multivar(Y = scaled.gene_exp, G = G_mat,
                          init.method = &quot;svd&quot;,
                          niter = 3000, used_niter = 1000,
                          verbose = T, return_samples = T)</code></pre>
-<p>More options for running GSFA are available in the <code>R/run_gsfa_LUHMES</code> script. For example, one can run Gibbs sampling in segments and restart from a previous run if limited computational resources are available.</p>
+<p>More options for running GSFA are available in the <code>R/run_gsfa_LUHMES.R</code> script. For example, one can run Gibbs sampling in segments and restart from a previous run if limited computational resources are available.</p>
 </div>
 <div id="session-information" class="section level1">
 <h1><span class="header-section-number">4</span> Session information</h1>
