@@ -10,7 +10,7 @@ research paper:
 
 ### Introduction
 
-[**Motivation and introduction on the GSFA model**](https://gradonion.github.io/GSFA_paper/index.html);
+[**Motivation and introduction for the GSFA model**](https://gradonion.github.io/GSFA_paper/index.html);
 
 ### Application of GSFA on LUHMES CROP-seq data
 
