@@ -460,7 +460,7 @@ combined_obj &lt;- subset(combined_obj,
 VlnPlot(combined_obj, 
         features = c(&#39;nFeature_RNA&#39;, &#39;nCount_RNA&#39;, &#39;percent_mt&#39;), 
         pt.size = 0)</code></pre>
-<p><img src="preprocess_and_gsfa_TCells_files/figure-html/seurat-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p><img src="preprocess_and_gsfa_TCells_files/figure-html/seurat%20QC-1.png" width="672" style="display: block; margin: auto;" /></p>
 <p>Dimensions of the merged gene expression matrix after QC:</p>
 <pre class="r"><code>paste0(&quot;Genes: &quot;, dim(combined_obj)[1])
 paste0(&quot;Cells: &quot;, dim(combined_obj)[2])</code></pre>
@@ -536,7 +536,7 @@ donor2 stimulated
 <p>To accommodate the application of GSFA, we adopt the transformation proposed in <a href="https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1861-6">Townes et al.</a>, and convert the scRNA-seq count data into deviance residuals, a continuous quantity analogous to z-scores that approximately follows a normal distribution.</p>
 <p>The deviance residual transformation overcomes some problems of the commonly used log transformation of read counts, and has been shown to improve downstream analyses, such as feature selection and clustering.</p>
 <p>In the following, we used the <code>deviance_residual_transform</code> function in <code>GSFA</code> to perform the tranformation.<br />
-<strong>Due to the size of the data, this process can take up to several hours, and should be run in an R script separately.</strong></p>
+<strong>Due to the size of the data, this process can take up to 1.1 hours, and should preferably be run in an R script separately.</strong></p>
 <pre class="r"><code>dev_res &lt;- deviance_residual_transform(t(as.matrix(combined_obj@assays$RNA@counts)))</code></pre>
 </div>
 <div id="feature-selection" class="section level2">
@@ -588,7 +588,9 @@ sample_group &lt;- combined_obj$orig.ident
 sample_group &lt;- (sample_group %in% c(&quot;TCells_D1S&quot;, &quot;TCells_D2S&quot;)) * 1</code></pre>
 <p>The number of cells in each group:</p>
 <pre class="r"><code>table(sample_group)</code></pre>
-<p>sample_group 0 1 10677 14278</p>
+<pre><code>sample_group
+    0     1 
+10677 14278 </code></pre>
 </div>
 </div>
 <div id="gsfa" class="section level1">

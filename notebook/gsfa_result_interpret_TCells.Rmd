@@ -1,8 +1,7 @@
 ---
-title: "GSFA Results of CD8+ T Cell CROP-seq Data"
+title: "Interpretation of GSFA Results on CD8+ T Cell CROP-seq Data"
 subtitle: "-- for manuscript"
 author: "Yifan Zhou (zhouyf@uchicago.edu)"
-date: '`r format(Sys.time(), "%Y-%m")`'
 output:
   html_document:
     number_sections: yes
@@ -12,22 +11,6 @@ output:
 
 ```{r setup, include=FALSE}
 requireNamespace("pander", quietly = TRUE)
-library(data.table)
-library(Matrix)
-library(tidyverse)
-library(ggplot2)
-theme_set(theme_bw() + theme(plot.title = element_text(size = 14, hjust = 0.5),
-                             axis.title = element_text(size = 14),
-                             axis.text = element_text(size = 12),
-                             legend.title = element_text(size = 13),
-                             legend.text = element_text(size = 12),
-                             panel.grid.minor = element_blank())
-)
-library(gridExtra)
-library(ComplexHeatmap)
-library(kableExtra)
-library(WebGestaltR)
-
 # set default chunk output
 knitr::opts_chunk$set(echo = TRUE,
                       message = FALSE,
@@ -44,50 +27,60 @@ pander::panderOptions('knitr.auto.asis', FALSE)
 pander::panderOptions("table.split.table", Inf)
 ```
 
-# Background
+# Introduction
 
-## Input data and pre-processing
+This page demonstrates how to visualize and interpret the results from a GSFA run.
 
-Source:   
-[Genome-wide CRISPR Screens in Primary Human T Cells Reveal Key Regulators of Immune Function](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6689405/), GEO accession: GSE119450.
+We have described in this [page](https://gradonion.github.io/GSFA_paper/preprocess_and_gsfa_TCells.html) how to run GSFA on CD8+ T cell CROP-seq data from Shifrut et al.
 
-Perturbations:    
-CRISPR knock-out of 20 genes (2 gRNAs per gene) + 8 non-targeting gRNAs. Guide conditions were defined on the target gene level; target genes were either found to regulate T cell responses in the genome-wide screens, or known checkpoint genes.    
-Guide RNAs were introduced into T cells through a novel procedure called sgRNA lentiviral infection with Cas9 protein electroporation (SLICE).
+To recapitulate, the processed dataset consists of 10677 unstimulated T cells and 14278 stimulated T cells.  
+They were subject to belong to one of the 21 perturbation conditions (CRISPR knock-out of 20 regulators of T cell proliferation or immune checkpoint genes, and negative control).  
+Top 6000 genes ranked by deviance statistics were kept. A modified two-group GSFA was performed on the data with 20 factors specified, and perturbation effects estimated separately for cells with/without TCR stimulation.
 
-Cells:    
-Primary human CD8+ T cells from two healthy donors, **with and without** T cell receptor (TCR) stimulation.   
-Cells from 2 donors were pooled together into 1 analysis. All cells have only a single type of gRNA readout. Quality control resulted in 24995 cells, including 5533 donor1_unstim, 6843 donor1_stim, 5144 donor2_unstim, and 7435 donor2_stim cells.
+## Load necessary packages and data
 
-Genes:    
-**Top 6000 genes ranked by the multinomial deviance statistics were kept.**
+```{r}
+library(data.table)
+library(Matrix)
+library(tidyverse)
+library(ggplot2)
+theme_set(theme_bw() + theme(plot.title = element_text(size = 14, hjust = 0.5),
+                             axis.title = element_text(size = 14),
+                             axis.text = element_text(size = 12),
+                             legend.title = element_text(size = 13),
+                             legend.text = element_text(size = 12),
+                             panel.grid.minor = element_blank())
+)
+library(gridExtra)
+library(ComplexHeatmap)
+library(kableExtra)
+library(WebGestaltR)
 
-Normalization:    
-Deviance residual transformation.   
-**Donor batch was not corrected for.**  
-**Unique UMI count, library size, and mitochondria percentage were all corrected for. The corrected and scaled expression data were used as input for subsequent GSFA.**
+source("../R/plotting_functions.R")
+data_folder <- "../data/TCells/"
+```
 
-## GSFA
-
-Input:    
-In addition to the expression matrix, we have a binary perturbation matrix ($G$) consisting of 21 types (20 genes + negative control) of gene-level KO conditions across cells.
-
-For Gibbs sampling, we specified 20 factors initialized from truncated SVD. Results were obtained from 4000 iterations, with the posterior mean estimates averaged over the last 1000 iterations.
+The first thing we need is the output of GSFA `fit_gsfa_multivar_2groups()` run. The lighter version containing just the posterior mean estimates and LFSR of perturbation-gene effects is enough. (See `R/run_gsfa_TCells_2groups.R` for more GSFA run details.)
 
 The association of $Z$ with $G$ were estimated separately for stimulated and unstimulated cells, generating two effect size matrices, $\beta_1$ and $\beta_0$, and two $LFSR$ matrices that summarized the effects of perturbations on genes for stimulated and unstimulated cells, respectively.
 
 ```{r}
-## Load data and plotting functions
-source("../R/plotting_functions.R")
-data_folder <- "../data/TCells/"
-
-## Load the lighter GSFA output from "R/run_gsfa_TCells_2groups.R":
 fit <- readRDS(paste0(data_folder, "gsfa_fit.light.rds"))
 gibbs_PM <- fit$posterior_means
 lfsr_mat1 <- fit$lfsr1[, -ncol(fit$lfsr1)]
 lfsr_mat0 <- fit$lfsr0[, -ncol(fit$lfsr0)]
+```
 
+We also need the cell by perturbation matrix which was used as input $G$ for GSFA.  
+(The row names of which can also inform us which group each cell belongs to.)
+
+```{r}
 G_mat <- readRDS(paste0(data_folder, "perturbation_matrix.rds"))
+```
+
+Finally, we load the mapping from gene name to ENSEMBL ID for all 6k genes used in GSFA, as well as selected neuronal marker genes. This is specific to this study and analysis.
+
+```{r}
 genes_df <- readRDS(paste0(data_folder, "top6k_genes.rds"))
 interest_df <- readRDS(paste0(data_folder, "selected_tcell_markers.rds"))
 KO_names <- colnames(lfsr_mat1)
@@ -95,9 +88,13 @@ KO_names <- colnames(lfsr_mat1)
 
 # Factor ~ Perturbation Associations
 
-## Perturbation effects on factors ($\beta$) (stimulated cells)
+## Perturbation effects on factors (stimulated cells)
 
-All targets and factors (Figure S4A):
+Fisrt of all, we look at the estimated effects of gene perturbations on factors inferred by GSFA. 
+
+We found that targeting of 9 genes, ARID1A, CBLB, CD5, CDKN1B, DGKA, LCP2, RASA2, SOCS1, and TCEB2, has significant effects (PIP > 0.95) on at least 1 of the 20 inferred factors.
+
+Estimated effects of perturbations on factors (Figure S4A):
 
 ```{r Fig_S4A, fig.width=9, fig.height=6.5}
 dotplot_beta_PIP(t(gibbs_PM$Gamma1_pm), t(gibbs_PM$beta1_pm),
@@ -107,17 +104,22 @@ dotplot_beta_PIP(t(gibbs_PM$Gamma1_pm), t(gibbs_PM$beta1_pm),
   coord_flip()
 ```
 
-Effects of selected perturbations on factors (Figure 3A):
+Here is a closer look at the estimated effects of selected perturbations on selected factors (Figure 3A):
+
 ```{r Fig_3A, fig.width=4.5, fig.height=4}
-targets <- c("ARID1A", "LCP2", "CD5", "CBLB", "RASA2", "DGKA", "TCEB2", "SOCS1", "CDKN1B")
+targets <- c("ARID1A", "LCP2", "CD5", "CBLB", "RASA2", 
+             "DGKA", "TCEB2", "SOCS1", "CDKN1B")
 complexplot_perturbation_factor(gibbs_PM$Gamma1_pm[-nrow(gibbs_PM$Gamma1_pm), ],
                                 gibbs_PM$beta1_pm[-nrow(gibbs_PM$beta1_pm), ],
                                 marker_names = KO_names, reorder_markers = targets,
                                 reorder_factors = c(2, 4, 9, 12))
 ```
 
-## Factor-perturbation association p values (stimulated cells)
+We can also assess the correlations between each pair of perturbation and inferred factor.  
+The distribution of correlation p values show significant signals in stimulated cells.
+
 ```{r fig.width=10, fig.height=5}
+## Indices of stimulated cells:
 stim_cells <-
   (1:nrow(G_mat))[startsWith(rownames(G_mat), "D1S") | 
                     startsWith(rownames(G_mat), "D2S")]
@@ -131,9 +133,9 @@ summ_pvalues(unlist(heatmap_matrix),
              title_text = "GSFA Stimulated\n(21 Targets x 20 Factors)")
 ```
 
-## Perturbation effects on factors ($\beta$) (unstimulated cells)
+## Perturbation effects on factors (unstimulated cells)
 
-All targets and factors (Figure S4B):
+In unstimulated cells, only three pairs of associations were detected at PIP > 0.95, which is unsurprising given the role of these targeted genes in regulating T cell responses (Figure S4B):
 
 ```{r Fig_S4B, fig.width=9, fig.height=6.5}
 dotplot_beta_PIP(t(gibbs_PM$Gamma0_pm), t(gibbs_PM$beta0_pm),
@@ -146,6 +148,8 @@ dotplot_beta_PIP(t(gibbs_PM$Gamma0_pm), t(gibbs_PM$beta0_pm),
 # Factor Interpretation
 
 ## Correlation within factors
+
+Since the GSFA model does not enforce orthogonality among factors, we first inspect the pairwise correlation within them to see if there is any redundancy. As we can see below, the inferred factors are mostly independent of each other.
 
 ```{r fig.width=7, fig.height=5}
 plot_pairwise.corr_heatmap(input_mat_1 = gibbs_PM$Z_pm,
@@ -163,7 +167,7 @@ plot_pairwise.corr_heatmap(input_mat_1 = (gibbs_PM$F_pm > 0.95) * 1,
 
 ## Gene loading in factors
 
-T cell markers:
+To understand these latent factors, we inspect the loadings (weights) of several marker genes for T cell activation or proliferation states in them.
 
 ```{r echo=FALSE}
 interest_df <- interest_df[interest_df$gene_name %in% genes_df$Name, ]
@@ -172,13 +176,13 @@ knitr::kable(interest_df) %>%
     kable_styling() %>% scroll_box(width = '100%', height = '400px')
 ```
 
-All factors (Figure S4C):
+We visualize both the gene PIPs (dot size) and gene weights (dot color) in all factors (Figure S4C):
 
 ```{r Fig_S4C, fig.width=8.5, fig.height=4}
 complexplot_gene_factor(genes_df, interest_df, gibbs_PM$F_pm, gibbs_PM$W_pm)
 ```
 
-Selected factors (Figure 3C):
+A closer look at some factors that are associated with perturbations (Figure 3C):
 
 ```{r Fig_3C, fig.width=5.5, fig.height=4}
 complexplot_gene_factor(genes_df, interest_df, gibbs_PM$F_pm, gibbs_PM$W_pm,
@@ -187,10 +191,12 @@ complexplot_gene_factor(genes_df, interest_df, gibbs_PM$F_pm, gibbs_PM$W_pm,
 
 ## GO enrichment analysis in factors
 
+To further characterize these latent factors, we perform GO (gene ontology) enrichment analysis of genes loaded on the factors using `WebGestalt`.
+
 Foreground genes: Genes w/ non-zero loadings in each factor (gene PIP > 0.95);    
 Background genes: all 6000 genes used in GSFA;    
 Statistical test: hypergeometric test (over-representation test);  
-Gene sets: Gene ontology "Biological Process" (non-redundant).
+Gene sets: GO Slim "Biological Process" (non-redundant).
 
 ```{r eval=FALSE}
 ## The "WebGestaltR" tool needs Internet connection.
@@ -214,7 +220,7 @@ for (i in 1:ncol(PIP_mat)){
 enrich_res_by_factor <- readRDS(paste0(data_folder, "GO_enrich_in_GSFA_factors.rds"))
 ```
 
-Figure 3D:
+Several GO “biological process” terms related to immune responses or cell cycle are enriched in factors 2, 4, 9, and 12 (Figure 3D):
 
 ```{r Fig_3D_factor2, fig.height=2.2, fig.width=7}
 factor_indx <- 2
@@ -257,6 +263,10 @@ barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
 ```
 
 # DEG Interpretation
+
+In GSFA, differential expression analysis can be performed based on the LFSR method. Here we evaluate the specific downstream genes affected by the perturbations detected by GSFA.
+
+We also performed several other differential expression methods for comparison, including scMAGeCK-LR, MAST, and DESeq.
 
 **Here, we compared the DEG results within stimulated cells.**
 
@@ -303,7 +313,8 @@ dge_comparison_df <- data.frame(Perturbation = KO_names,
 dge_comparison_df$Perturbation[dge_comparison_df$Perturbation == "NonTarget"] <- "NegCtrl"
 ```
 
-Figure 4A:
+Number of DEGs detected under each perturbation using 4 different methods (Figure 4A):  
+Compared with other differential expression analysis methods, GSFA detected the most DEGs for all 9 gene targets that have significant effects.
 
 ```{r Fig_4A, fig.width=13, fig.height=5.5}
 dge_plot_df <- reshape2::melt(dge_comparison_df, id.var = "Perturbation",
@@ -325,9 +336,17 @@ ggplot(dge_plot_df, aes(x = Perturbation, y = Num_DEGs+1, fill = Method)) +
 
 ## Perturbation effects on marker genes
 
+To better understand the functions of these 7 target genes, we examined their effects on marker genes for T cell activation or proliferation states.
+
 ### GSFA
 
-Figure 4D:
+Here are the summarized effects of perturbations on marker genes estimated by GSFA (Figure 4D).
+
+Cell cycle:  
+As we can see, knockout of SOCS1 or CDKN1B has positive effects on cell proliferation markers, indicating increased cell proliferation.
+
+T cell activation and immune response:  
+Knockout of CD5, CBLB, RASA2 or TCEB2 has mostly positve effects on effector markers, indicating T cell activation; knockout of ARID1A has the opposite pattern.
 
 ```{r Fig_4D, fig.width=5.5, fig.height=4.5}
 complexplot_gene_perturbation(genes_df, interest_df,
@@ -339,7 +358,7 @@ complexplot_gene_perturbation(genes_df, interest_df,
 
 ### scMAGeCK
 
-Figure 4E:
+Here are scMAGeCK estimated effects of perturbations on marker genes (Figure 4E):
 
 ```{r Fig_4E, fig.width=5.5, fig.height=4.5}
 score_mat <- scmageck_res$score
@@ -368,7 +387,7 @@ for (m in targets){
 }
 ```
 
-Figure S4D:
+Here are DESeq2 estimated effects of perturbations on marker genes (Figure S4D):
 
 ```{r Fig_S4D, fig.width=5.5, fig.height=4.5}
 complexplot_gene_perturbation(genes_df, interest_df,
@@ -394,7 +413,7 @@ for (m in targets){
 }
 ```
 
-Figure S4E:
+MAST estimated effects of perturbations on marker genes (Figure S4E):
 
 ```{r Fig_S4E, fig.width=5.5, fig.height=4.5}
 complexplot_gene_perturbation(genes_df, interest_df,
@@ -407,10 +426,12 @@ complexplot_gene_perturbation(genes_df, interest_df,
 
 ## GO enrichment in DEGs
 
+We further examine these DEGs for enrichment of relevant biological processes through GO enrichment analysis.
+
 Foreground genes: Genes w/ GSFA LFSR < 0.05 under each perturbation;    
 Background genes: all 6000 genes used in GSFA;    
 Statistical test: hypergeometric test (over-representation test);    
-Gene sets: Gene ontology "Biological Process" (non-redundant).
+Gene sets: GO Slim "Biological Process" (non-redundant).
 
 ```{r eval=FALSE}
 ## The "WebGestaltR" tool needs Internet connection.
@@ -520,7 +541,8 @@ terms_of_interest_df <- left_join(terms_of_interest_df, signif_term_df,
                                   by = "description")
 ```
 
-Fold of enrichment for selected GO BP terms (Figure 4C):
+Here are selected GO "biological process"" terms and their folds of enrichment in DEGs detected by GSFA (Figure 4C).  
+(In the code below, we omitted the content in `terms_of_interest_df` as one can subset the `enrich_table` with any terms of their choice.)
 
 ```{r Fig_4C, fig.height=5.5, fig.width=9}
 interest_enrich_table <- enrich_table[terms_of_interest_df$description, ]

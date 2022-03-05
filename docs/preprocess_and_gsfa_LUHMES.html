@@ -462,7 +462,7 @@ paste0(&quot;Cells: &quot;, dim(combined_obj)[2])</code></pre>
 <p>To accommodate the application of GSFA, we adopt the transformation proposed in <a href="https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1861-6">Townes et al.</a>, and convert the scRNA-seq count data into deviance residuals, a continuous quantity analogous to z-scores that approximately follows a normal distribution.</p>
 <p>The deviance residual transformation overcomes some problems of the commonly used log transformation of read counts, and has been shown to improve downstream analyses, such as feature selection and clustering.</p>
 <p>In the following, we used the <code>deviance_residual_transform</code> function in <code>GSFA</code> to perform the tranformation.<br />
-<strong>Due to the size of the data, this process can take up to several hours, and should be run in an R script separately.</strong></p>
+<strong>Due to the size of the data, this process can take up to 30 minutes.</strong></p>
 <pre class="r"><code>dev_res &lt;- deviance_residual_transform(t(as.matrix(combined_obj@assays$RNA@counts)))</code></pre>
 </div>
 <div id="feature-selection" class="section level2">

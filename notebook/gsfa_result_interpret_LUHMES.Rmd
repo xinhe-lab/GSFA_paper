@@ -1,5 +1,5 @@
 ---
-title: "GSFA Results of LUHMES CROP-seq Data"
+title: "Interpretation of GSFA Results on LUHMES CROP-seq Data"
 subtitle: "-- for manuscript"
 author: "Yifan Zhou (zhouyf@uchicago.edu)"
 output:
@@ -11,22 +11,6 @@ output:
 
 ```{r setup, include=FALSE}
 requireNamespace("pander", quietly = TRUE)
-library(data.table)
-library(Matrix)
-library(tidyverse)
-library(ggplot2)
-theme_set(theme_bw() + theme(plot.title = element_text(size = 14, hjust = 0.5),
-                             axis.title = element_text(size = 14),
-                             axis.text = element_text(size = 12),
-                             legend.title = element_text(size = 13),
-                             legend.text = element_text(size = 12),
-                             panel.grid.minor = element_blank())
-)
-library(gridExtra)
-library(ComplexHeatmap)
-library(kableExtra)
-library(WebGestaltR)
-
 # set default chunk output
 knitr::opts_chunk$set(echo = T,
                       message = FALSE,
@@ -43,38 +27,66 @@ pander::panderOptions('knitr.auto.asis', FALSE)
 pander::panderOptions("table.split.table", Inf)
 ```
 
-# Background
+# Introduction
 
-Original CROP-seq study:   
-[High-throughput single-cell functional elucidation of neurodevelopmental disease-associated genes reveals convergent mechanisms altering neuronal differentiation](https://genome.cshlp.org/content/30/9/1317.full)
+This tutorial demonstrates how to visualize and interpret the results from a GSFA run.
 
-The study targeted 14 neurodevelopmental genes, including 13 autism risk genes, with CRISPR knock-down in Lund human mesencephalic (LUHMES) neural progenitor cells. The overall goal is to understand the effects of these target genes on neuronal differentiation.
+We have described how to run GSFA on LUHMES CROP-seq data from Lalli et al. [here](https://gradonion.github.io/GSFA_paper/preprocess_and_gsfa_LUHMES.html).
 
-# GSFA
+To recapitulate, the processed dataset consists of 8708 neural progenitor cells that belong to one of the 15 perturbation conditions (CRISPR knock-down of 14 neurodevelopmental genes, and negative control). Top 6000 genes ranked by deviance statistics were kept. And GSFA was performed on the data with 20 factors specified.
 
-Input:    
-In addition to the expression matrix, we have a binary perturbation matrix ($G$) consisting of 15 types (14 genes + negative control) of gene-level knock-down conditions across cells.
-
-For Gibbs sampling, we specified 20 factors initialized from truncated SVD. Results were obtained from 3000 iterations, with the posterior mean estimates averaged over the last 1000 iterations.
+## Load necessary packages and data
 
 ```{r}
-## Load data and plotting functions
+library(data.table)
+library(Matrix)
+library(tidyverse)
+library(ggplot2)
+theme_set(theme_bw() + theme(plot.title = element_text(size = 14, hjust = 0.5),
+                             axis.title = element_text(size = 14),
+                             axis.text = element_text(size = 12),
+                             legend.title = element_text(size = 13),
+                             legend.text = element_text(size = 12),
+                             panel.grid.minor = element_blank())
+)
+library(gridExtra)
+library(ComplexHeatmap)
+library(kableExtra)
+library(WebGestaltR)
+
 source("../R/plotting_functions.R")
 data_folder <- "../data/LUHMES/"
+```
 
-## Load the lighter GSFA output from "R/run_LUHMES.R":
+The first thing we need is the output of GSFA `fit_gsfa_multivar()` run. The lighter version containing just the posterior mean estimates and LFSR of perturbation-gene effects is enough. (See `R/run_gsfa_LUHMES.R` for more GSFA run details.)
+
+```{r}
 fit <- readRDS(paste0(data_folder, "gsfa_fit.light.rds"))
 gibbs_PM <- fit$posterior_means
 lfsr_mat <- fit$lfsr[, -ncol(fit$lfsr)]
+KO_names <- colnames(lfsr_mat)
+```
+
+We also need the cell by perturbation matrix which was used as input $G$ for GSFA.
+
+```{r}
 G_mat <- readRDS(paste0(data_folder, "perturbation_matrix.rds"))
+```
+
+Finally, we load the mapping from gene name to ENSEMBL ID for all 6k genes used in GSFA, as well as selected neuronal marker genes. This is specific to this study and analysis.
+
+```{r}
 genes_df <- readRDS(paste0(data_folder, "top6k_genes.rds"))
 interest_df <- readRDS(paste0(data_folder, "selected_neuronal_markers.rds"))
-KO_names <- colnames(lfsr_mat)
 ```
 
 # Factor ~ Perturbation Association
 
-## Perturbation effects on factors ($\beta$)
+## Perturbation effects on factors
+
+Fisrt of all, we look at the estimated effects of gene perturbations on factors inferred by GSFA. 
+
+We found that targeting of 7 genes, ADNP, ARID1B, ASH1L, CHD2, DYRK1A, PTEN, and SETD5, has significant effects (PIP > 0.95) on at least 1 of the 20 inferred factors.
 
 All targets and factors (Figure S6A):
 ```{r Fig_S6A, fig.width=9, fig.height=5.5}
@@ -92,7 +104,7 @@ GSFA::dotplot_beta_PIP(fit,
                        reorder_targets = c(KO_names[KO_names!="Nontargeting"], "Nontargeting"))
 ```
 
-Effects of selected perturbations on factors (Figure 5A):
+Here is a closer look at the estimated effects of selected perturbations on selected factors (Figure 5A):
 
 ```{r Fig_5A, fig.width=4, fig.height=4}
 targets <- c("ADNP", "ARID1B", "ASH1L", "CHD2", "DYRK1A", "PTEN", "SETD5")
@@ -111,6 +123,10 @@ GSFA::dotplot_beta_PIP(fit,
 ```
 
 ## Factor-perturbation association p values
+
+We can also assess the correlations between each pair of perturbation and inferred factor.  
+The distribution of correlation p values show significant signals.
+
 ```{r fig.width=10, fig.height=5}
 gibbs_res_tb <- make_gibbs_res_tb(gibbs_PM, G_mat, compute_pve = F)
 heatmap_matrix <- gibbs_res_tb %>% select(starts_with("pval"))
@@ -124,6 +140,8 @@ summ_pvalues(unlist(heatmap_matrix),
 # Factor Interpretation
 
 ## Correlation within factors
+
+Since the GSFA model does not enforce orthogonality among factors, we first inspect the pairwise correlation within them to see if there is any redundancy. As we can see below, the inferred factors are mostly independent of each other.
 
 ```{r fig.width=7, fig.height=5}
 plot_pairwise.corr_heatmap(input_mat_1 = gibbs_PM$Z_pm,
@@ -141,7 +159,7 @@ plot_pairwise.corr_heatmap(input_mat_1 = (gibbs_PM$F_pm > 0.95) * 1,
 
 ## Gene loading in factors
 
-Neuronal differentiation markers:
+To understand these latent factors, we inspect the loadings (weights) of several marker genes for neuron maturation and differentiation in them.
 
 ```{r echo=FALSE}
 interest_df <- interest_df[interest_df$gene_name %in% genes_df$Name, ]
@@ -150,13 +168,13 @@ knitr::kable(interest_df) %>%
     kable_styling() %>% scroll_box(width = '100%', height = '400px')
 ```
 
-All factors (Figure S6B):
+We visualize both the gene PIPs (dot size) and gene weights (dot color) in all factors (Figure S6B):
 
 ```{r Fig_S6B, fig.width=10, fig.height=5}
 complexplot_gene_factor(genes_df, interest_df, gibbs_PM$F_pm, gibbs_PM$W_pm)
 ```
 
-Selected factors (Figure 5C):
+A closer look at some factors that are associated with perturbations (Figure 5C):
 
 ```{r Fig_5C, fig.width=6.5, fig.height=5}
 complexplot_gene_factor(genes_df, interest_df, gibbs_PM$F_pm, gibbs_PM$W_pm,
@@ -165,10 +183,12 @@ complexplot_gene_factor(genes_df, interest_df, gibbs_PM$F_pm, gibbs_PM$W_pm,
 
 ## GO enrichment analysis in factors
 
-Foreground genes: Genes w/ non-zero loadings in each factor (gene PIP > 0.95);    
+To further characterize these latent factors, we perform GO (gene ontology) enrichment analysis of genes loaded on the factors using `WebGestalt`.
+
+Foreground genes: genes w/ non-zero loadings in each factor (gene PIP > 0.95);    
 Background genes: all 6000 genes used in GSFA;    
 Statistical test: hypergeometric test (over-representation test);  
-Gene sets: Gene ontology "Biological Process" (non-redundant).
+Gene sets: GO Slim "Biological Process" (non-redundant).
 
 ```{r eval=FALSE}
 ## The "WebGestaltR" tool needs Internet connection.
@@ -192,7 +212,7 @@ for (i in 1:ncol(PIP_mat)){
 enrich_res_by_factor <- readRDS(paste0(data_folder, "GO_enrich_in_GSFA_factors.rds"))
 ```
 
-Figure 5D:
+Several GO “biological process” terms related to neuronal development are enriched in factors 4, 9, and 16 (Figure 5D):
 
 ```{r Fig_5D_factor4, fig.height=2.4, fig.width=7}
 factor_indx <- 4
@@ -203,7 +223,8 @@ terms_of_interest <- c("regulation of ion transmembrane transport",
 barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
                          terms_of_interest = terms_of_interest,
                          str_wrap_length = 35, pval_max = 8, FC_max = 6) +
-  labs(title = paste0("Factor ", factor_indx))
+  labs(title = paste0("Factor ", factor_indx),
+       x = "Fold of enrichment")
 ```
 
 ```{r Fig_5D_factor9, fig.height=2.4, fig.width=7}
@@ -215,7 +236,8 @@ terms_of_interest <- c("actin filament organization",
 barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
                          terms_of_interest = terms_of_interest,
                          str_wrap_length = 35, pval_max = 8, FC_max = 6) +
-  labs(title = paste0("Factor ", factor_indx))
+  labs(title = paste0("Factor ", factor_indx),
+       x = "Fold of enrichment")
 ```
 
 ```{r Fig_5D_factor16, fig.height=1.8, fig.width=7}
@@ -225,10 +247,15 @@ terms_of_interest <- c("developmental growth involved in morphogenesis",
 barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
                          terms_of_interest = terms_of_interest, 
                          str_wrap_length = 35, pval_max = 8, FC_max = 6) +
-  labs(title = paste0("Factor ", factor_indx))
+  labs(title = paste0("Factor ", factor_indx),
+       x = "Fold of enrichment")
 ```
 
 # DEG Interpretation
+
+In GSFA, differential expression analysis can be performed based on the LFSR method. Here we evaluate the specific downstream genes affected by the perturbations detected by GSFA.
+
+We also performed several other differential expression methods for comparison, including scMAGeCK-LR, MAST, and DESeq.
 
 ## Number of DEGs detected by different methods
 
@@ -243,7 +270,7 @@ signif_num_tb <- t(data.frame(KO = names(lfsr_signif_num),
                            Num_genes = lfsr_signif_num,
                            row.names = NULL))
 knitr::kable(rbind(signif_num_tb[, 1:5], signif_num_tb[, 6:10], signif_num_tb[, 11:15]),
-             caption = "Number of DEGs detected by GSFA:") %>%
+             caption = "Number of DEGs detected by GSFA under each perturbation:") %>%
   kable_styling() %>% scroll_box(width = '100%')
 ```
 
@@ -272,7 +299,7 @@ dge_comparison_df <- data.frame(Perturbation = names(lfsr_signif_num),
 dge_comparison_df$Perturbation[dge_comparison_df$Perturbation == "Nontargeting"] <- "NegCtrl"
 ```
 
-Figure 5E:
+Number of DEGs detected under each perturbation using 4 different methods (Figure 5E):
 
 ```{r Fig_5E, fig.width=13, fig.height=5}
 dge_plot_df <- reshape2::melt(dge_comparison_df, id.var = "Perturbation",
@@ -292,11 +319,19 @@ ggplot(dge_plot_df, aes(x = Perturbation, y = Num_DEGs+1, fill = Method)) +
         legend.text = element_text(size = 13))
 ```
 
+Compared with other differential expression analysis methods, GSFA detected the most DEGs for 5 out of 7 gene targets that have significant effects.
+
 ## Perturbation effects on marker genes
+
+To better understand the functions of these 7 target genes, we examined their effects on marker genes for neuron maturation and differentiation.
 
 ### GSFA
 
-Figure 5G:
+Here are the summarized effects of perturbations on marker genes estimated by GSFA (Figure 5G).
+
+As we can see, knockdown of ADNP, ASH1L, CHD2, and DYRK1A has mostly negative effects on mature neuronal markers, and positive effects on negative regulators of neuron projection, indicating delayed neuron maturation.
+
+Knockdown of PTEN and SETD5 has the opposite pattern, which indicates accelerated neuron maturation.
 
 ```{r Fig_5G, fig.width=6.5, fig.height=5}
 targets <- c("ADNP", "ARID1B", "ASH1L", "CHD2", "DYRK1A", "PTEN", "SETD5")
@@ -318,7 +353,7 @@ GSFA::dotplot_total_effect(fit,
 
 ### scMAGeCK
 
-Figure 5H:
+Here are scMAGeCK estimated effects of perturbations on marker genes (Figure 5H):
 
 ```{r Fig_5H, fig.width=6.5, fig.height=5}
 score_mat <- scmageck_res$score
@@ -345,7 +380,7 @@ for (m in targets){
 }
 ```
 
-Figure S5C:
+Here are DESeq2 estimated effects of perturbations on marker genes (Figure S5C):
 
 ```{r Fig_S5C, fig.width=6.5, fig.height=5}
 complexplot_gene_perturbation(genes_df, interest_df,
@@ -369,7 +404,7 @@ for (m in targets){
 }
 ```
 
-Figure S5D:
+MAST estimated effects of perturbations on marker genes (Figure S5D):
 
 ```{r Fig_S5D, fig.width=6.5, fig.height=5}
 complexplot_gene_perturbation(genes_df, interest_df,
@@ -381,6 +416,8 @@ complexplot_gene_perturbation(genes_df, interest_df,
 ```
 
 ## GO enrichment in DEGs
+
+We further examine these DEGs for enrichment of relevant biological processes through GO enrichment analysis.
 
 Foreground genes: Genes w/ GSFA LFSR < 0.05 under each perturbation;    
 Background genes: all 6000 genes used in GSFA;    
@@ -477,7 +514,9 @@ terms_of_interest_df <- left_join(terms_of_interest_df, signif_term_df,
                                   by = "description")
 ```
 
-Fold of enrichment for selected GO BP terms (Figure S5E):
+Here are selected GO "biological process"" terms and their folds of enrichment in DEGs detected by GSFA (Figure S5E):  
+(In the code below, we omitted the content in `terms_of_interest_df` as one can subset the `enrich_table` with any terms of their choice.)
+
 ```{r Fig_S5E, fig.height=5.5, fig.width=8}
 interest_enrich_table <- enrich_table[terms_of_interest_df$description,
                                       colnames(enrich_table) != "DYRK1A"]
@@ -497,7 +536,6 @@ map <- Heatmap(abs(interest_enrich_table),
                width = unit(6, "cm"))
 draw(map, heatmap_legend_side = "bottom")
 ```
-
 
 # Session Information
 

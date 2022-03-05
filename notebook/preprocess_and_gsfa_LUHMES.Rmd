@@ -52,7 +52,7 @@ High-throughput single-cell functional elucidation of neurodevelopmental disease
 Data source:  
 GEO accession: [GSE142078](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE142078), `GSE142078_RAW.tar` file.
 
-The study targeted 14 neurodevelopmental genes, including 13 autism risk genes, with CRISPR knock-down in Lund human mesencephalic (LUHMES) neural progenitor cells. The overall goal is to understand the effects of these target genes on the transcriptome and on the process of neuronal differentiation.
+The study targeted 14 neurodevelopmental genes, including 13 autism risk genes, with CRISPR knock-down in Lund human mesencephalic (LUHMES) neural progenitor cells. After CRISPR targeting, the cells were differentiated into postmitotic neurons and sequenced. The overall goal is to understand the effects of these target genes on the transcriptome and on the process of neuronal differentiation.
 
 # Preprocessing of CROP-seq data
 
@@ -63,7 +63,7 @@ The original data came in three batches, each in standard `cellranger` single-ce
 Meanwhile, each cell is also assigned its CRISPR perturbation target based the gRNA readout. Although each gene was targeted by 3 gRNAs, and 5 non-targeting gRNAs were designed as negative control, only gene-level perturbations are assigned to cells, resulting in 15 (14 genes + negative control) perturbation groups in total.  
 (Each cell contains a unique gRNA, so the assignment is straight-forward.)
 
-```{r}
+```{r load and merge}
 ## Change the following directory to where the downloaded data is:
 data_dir <- "/project2/xinhe/yifan/Factor_analysis/LUHMES/GSE142078_raw/"
 
@@ -125,9 +125,10 @@ combined_obj <- merge(seurat_lst[[1]], c(seurat_lst[[2]], seurat_lst[[3]]),
                       project = "LUHMES")
 ```
 
-Numbers of cells and genes in the merged gene expression matrix:
-```{r}
-dim(combined_obj)
+Dimensions of the merged gene expression matrix:
+```{r results="hold"}
+paste0("Genes: ", dim(combined_obj)[1])
+paste0("Cells: ", dim(combined_obj)[2])
 ```
 
 ## Quality control
@@ -136,7 +137,7 @@ Next, Seurat is used to filter cells with a library size > 20000 or more than 10
 
 The violin plots show the distributions of unique UMI count, library size, and mitochondria gene percentage in cells from each batch.
 
-```{r seurat}
+```{r seurat QC}
 MT_genes <- feature.names %>% filter(startsWith(V2, "MT-")) %>% pull(V1)
 combined_obj[['percent_mt']] <- PercentageFeatureSet(combined_obj, 
                                                      features = MT_genes)
@@ -147,9 +148,10 @@ VlnPlot(combined_obj,
         pt.size = 0)
 ```
 
-Numbers of cells and genes after QC:
-```{r}
-dim(combined_obj)
+Dimensions of the merged gene expression matrix after QC:
+```{r results="hold"}
+paste0("Genes: ", dim(combined_obj)[1])
+paste0("Cells: ", dim(combined_obj)[2])
 ```
 
 ## Deviance residual transformation
@@ -159,7 +161,7 @@ To accommodate the application of GSFA, we adopt the transformation proposed in 
 The deviance residual transformation overcomes some problems of the commonly used log transformation of read counts, and has been shown to improve downstream analyses, such as feature selection and clustering.
 
 In the following, we used the `deviance_residual_transform` function in `GSFA` to perform the tranformation.  
-**Due to the size of the data, this process can take up to several hours, and should be run in an R script separately.**
+**Due to the size of the data, this process can take up to 30 minutes.**
 
 ```{r dev_res_transform, eval=FALSE}
 dev_res <- deviance_residual_transform(t(as.matrix(combined_obj@assays$RNA@counts)))
@@ -194,7 +196,7 @@ scaled.gene_exp <- scale(dev_res_corrected)
 
 ## Inputs for GSFA
 
-The corrected and scaled gene expression matrix (8708 cells by 6000 genes) will be used as input for GSFA `fit_gsfa_multivar` argument $Y$. We annonate this matrix with cell and gene names so we can keep track.
+The corrected and scaled gene expression matrix (8708 cells by 6000 genes) will be used as input for GSFA input argument `Y`. We annonate this matrix with cell and gene names so we can keep track.
 
 ```{r eval=FALSE}
 sample_names <- colnames(combined_obj@assays$RNA@counts)
@@ -203,7 +205,7 @@ rownames(scaled.gene_exp) <- sample_names
 colnames(scaled.gene_exp) <- gene_names[top_gene_index]
 ```
 
-In addition, we have a cell by perturbation matrix containing gene-level perturbation conditions across cells for GSFA `fit_gsfa_multivar` argument $G$:
+In addition, we have a cell by perturbation matrix containing gene-level perturbation conditions across cells for GSFA input argument `G`:
 
 ```{r}
 G_mat <- combined_obj@meta.data[, 4:18]
@@ -229,9 +231,9 @@ ggplot(data = num_cells_df, aes(x=locus, y=count)) +
 
 # GSFA
 
-Now that we have the two inputs we need, we can perform GSFA (guided sparse factor analysis) on the data.
+Now that we have the inputs we need (`scaled.gene_exp`, `G_mat`), we can perform GSFA (guided sparse factor analysis) on the data.
 
-Below we specify 20 factors initialized from truncated SVD and run Gibbs sampling for 3000 iterations, with the posterior mean estimates computed over the last 1000 iterations of samples.
+In `fit_gsfa_multivar()`, we specify 20 factors initialized from truncated SVD and run Gibbs sampling for 3000 iterations, with the posterior mean estimates computed over the last 1000 iterations of samples.
 
 **This process is both time and memory intensive, and should be run in an R script separately, preferably on a high performance computing cluster that can guarantee 30GB memory and 3.5 (typically ~3) hours of runtime without interruption.**
 
@@ -245,7 +247,7 @@ fit <- fit_gsfa_multivar(Y = scaled.gene_exp, G = G_mat,
                          verbose = T, return_samples = T)
 ```
 
-More options for running GSFA are available in the `R/run_gsfa_LUHMES` script. For example, one can run Gibbs sampling in segments and restart from a previous run if limited computational resources are available.
+More options for running GSFA are available in the `R/run_gsfa_LUHMES.R` script. For example, one can run Gibbs sampling in segments and restart from a previous run if limited computational resources are available.
 
 # Session information
 

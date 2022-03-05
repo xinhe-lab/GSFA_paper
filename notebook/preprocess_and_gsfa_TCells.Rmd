@@ -1,0 +1,300 @@
+---
+title: "Application of GSFA on CD8+ T Cell CROP-seq Data"
+subtitle: "-- for manuscript"
+author: "Yifan Zhou (zhouyf@uchicago.edu)"
+output:
+  html_document:
+    number_sections: yes
+    toc: yes
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+requireNamespace("pander", quietly = TRUE)
+# set default chunk output
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      comment = NA,
+                      tidy = FALSE,
+                      fig.width = 7,
+                      fig.height = 5,
+                      fig.align = "center",
+                      results = "asis")
+
+# formatting of pander tables
+pander::panderOptions('knitr.auto.asis', FALSE)
+pander::panderOptions("table.split.table", Inf)
+```
+
+# Introduction
+
+This page describes the preprocessing of single-cell CRISPR screen (CROP-seq) dataset in [Shifrut et al.](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6689405/), and how to run GSFA on the processed data.
+
+Due to the size of data, we recommend running the code in this tutorial in an R script instead of in R markdown.
+
+## Necessary packages
+
+```{r}
+library(data.table)
+library(tidyverse)
+library(Matrix)
+library(Seurat)
+library(GSFA)
+library(ggplot2)
+```
+
+## Original study and data source
+
+Original CROP-seq study:   
+Genome-wide CRISPR Screens in Primary Human T Cells Reveal Key Regulators of Immune Function. Cell. (2018).
+
+Data source:  
+GEO accession: [GSE119450](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE119450), `GSE119450_RAW.tar` file.
+
+The study targeted 20 genes, including 12 genes that were identified to regulate T cell proliferation, and 8 known immune checkpoint genes with CRISPR knock-out in primary human CD8+ T cells. After CRISPR targeting, cells either underwent T cell receptor (TCR) stimulation or not before sequencing. The overall goal is to understand the effects of these target genes on the transcriptome and on T cell states and stimulation responses.
+
+# Preprocessing of CROP-seq data
+
+## Merge experimental batches
+
+The original data came in four batches (donor 1 and 2 $\times$ unstimulated and stimulated), each in standard `cellranger` single-cell RNA-seq output format. Below is the code to merge all batches of cells together into one dataset.
+
+Meanwhile, each cell is also assigned its CRISPR perturbation target based the gRNA readout. Although each gene was targeted by 2 gRNAs, and 8 non-targeting gRNAs were designed as negative control, only gene-level perturbations are assigned to cells, resulting in 21 (20 genes + negative control) perturbation groups in total.  
+(Each cell contains a unique gRNA, so the assignment is straight-forward.)
+
+```{r load and merge}
+## Change the following directory to where the downloaded data is:
+data_dir <- "/project2/xinhe/yifan/Factor_analysis/Stimulated_T_Cells/GSE119450_RAW/"
+
+filename_tb <- 
+  data.frame(experiment = c("D1S", "D2S", "D1N", "D2N"),
+             prefix = c("GSM3375488_D1S", "GSM3375490_D2S", 
+                        "GSM3375487_D1N", "GSM3375489_D2N"),
+             stringsAsFactors = F)
+seurat_lst <- list()
+guide_lst <- list()
+
+for (i in 1:4){
+  experiment <- filename_tb$experiment[i]
+  prefix <- filename_tb$prefix[i]
+  cat(paste0("Loading data of ", experiment, " ..."))
+  cat("\n\n")
+  feature.names <- data.frame(fread(paste0(data_dir, experiment, "/genes.tsv"),
+                                    header = FALSE), stringsAsFactors = FALSE)
+  barcode.names <- data.frame(fread(paste0(data_dir, experiment, "/barcodes.tsv"),
+                                    header = FALSE), stringsAsFactors = FALSE)
+  barcode.names$V2 <- sapply(strsplit(barcode.names$V1, split = "-"),
+                             function(x){x[1]})
+  # Load the gene count matrix (gene x cell) and annotate the dimension names:
+  dm <- readMM(file = paste0(data_dir, experiment, "/matrix.mtx"))
+  rownames(dm) <- feature.names$V1
+  colnames(dm) <- barcode.names$V2
+  
+  # Load the meta data of cells:
+  metadata <- data.frame(fread(paste0(data_dir, experiment, "/",
+                                      prefix, "_CellBC_sgRNA.csv.gz"),
+                               header = T, sep = ','), check.names = F)
+  metadata$gene_target <- sapply(strsplit(metadata$gRNA.ID, split = "[.]"),
+                                 function(x){x[3]})
+  metadata$guide <- sapply(strsplit(metadata$gRNA.ID, split = "[.]"),
+                           function(x){paste0(x[2], ".", x[3])})
+
+  metadata <- metadata %>% filter(Cell.BC %in% barcode.names$V2)
+  targets <- unique(metadata$gene_target)
+  targets <- targets[order(targets)]
+  
+  # Make a cell by perturbation matrix:
+  guide_mat <- data.frame(matrix(nrow = nrow(metadata),
+                                 ncol = length(targets)))
+  rownames(guide_mat) <- metadata$Cell.BC
+  colnames(guide_mat) <- targets
+  for (m in targets){
+    guide_mat[[m]] <- (metadata$gene_target == m) * 1
+  }
+  guide_lst[[experiment]] <- guide_mat
+  
+  # Only keep cells with gRNA info:
+  dm.cells_w_gRNA <- dm[, metadata$Cell.BC]
+  cat("Dimensions of final gene expression matrix: ")
+  cat(dim(dm.cells_w_gRNA))
+  cat("\n\n")
+  
+  dm.seurat <- CreateSeuratObject(dm.cells_w_gRNA, project = paste0("TCells_", experiment))
+  dm.seurat <- AddMetaData(dm.seurat, metadata = guide_mat)
+  seurat_lst[[experiment]] <- dm.seurat
+}
+
+combined_obj <- merge(seurat_lst[[1]], 
+                      c(seurat_lst[[2]], seurat_lst[[3]], seurat_lst[[4]]),
+                      add.cell.ids = filename_tb$experiment,
+                      project = "T_cells_all_merged")
+```
+
+Dimensions of the merged gene expression matrix:
+```{r results="hold"}
+paste0("Genes: ", dim(combined_obj)[1])
+paste0("Cells: ", dim(combined_obj)[2])
+```
+
+## Quality control
+
+Next, Seurat is used to filter cells that contain < 500 expressed genes or more than 10% of total read counts from mitochondria genes.
+
+The violin plots show the distributions of unique UMI count, library size, and mitochondria gene percentage in cells from each batch.
+
+```{r seurat QC}
+MT_genes <- feature.names %>% filter(startsWith(V2, "MT-")) %>% pull(V1)
+combined_obj[['percent_mt']] <- PercentageFeatureSet(combined_obj, 
+                                                     features = MT_genes)
+combined_obj <- subset(combined_obj, 
+                       subset = percent_mt < 10 & nFeature_RNA > 500)
+VlnPlot(combined_obj, 
+        features = c('nFeature_RNA', 'nCount_RNA', 'percent_mt'), 
+        pt.size = 0)
+```
+
+Dimensions of the merged gene expression matrix after QC:
+```{r results="hold"}
+paste0("Genes: ", dim(combined_obj)[1])
+paste0("Cells: ", dim(combined_obj)[2])
+```
+
+The number of cells in each donor/stimulation status:
+```{r echo=FALSE}
+tmp <- table(combined_obj$orig.ident)
+table <- data.frame(status = names(tmp), number = as.numeric(tmp), 
+                    description = c("donor1 unstimulated",
+                                    "donor1 stimulated",
+                                    "donor2 unstimulated",
+                                    "donor2 stimulated"))
+knitr::kable(table) %>%
+  kableExtra::kable_styling() %>% 
+  kableExtra::scroll_box()
+```
+
+## Deviance residual transformation
+
+To accommodate the application of GSFA, we adopt the transformation proposed in [Townes et al.](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1861-6), and convert the scRNA-seq count data into deviance residuals, a continuous quantity analogous to z-scores that approximately follows a normal distribution.
+
+The deviance residual transformation overcomes some problems of the commonly used log transformation of read counts, and has been shown to improve downstream analyses, such as feature selection and clustering.
+
+In the following, we used the `deviance_residual_transform` function in `GSFA` to perform the tranformation.  
+**Due to the size of the data, this process can take up to 1.1 hours, and should preferably be run in an R script separately.**
+
+```{r dev_res_transform, eval=FALSE}
+dev_res <- deviance_residual_transform(t(as.matrix(combined_obj@assays$RNA@counts)))
+```
+
+## Feature selection
+
+Genes with constant expression across cells are not informative and will have a deviance of 0, while genes that vary across cells in expression will have a larger deviance. 
+
+Therefore, one can pick the genes with high deviance as an alternative to selecting highly variable genes, with the advantage that the selection is not sensitive to normalization.
+
+Here we select the top 6000 genes ranked by deviance statistics, and downsize the gene expression matrix.
+
+```{r top_gene_selection, eval=FALSE}
+top_gene_index <- select_top_devres_genes(dev_res, num_top_genes = 6000)
+dev_res_filtered <- dev_res[, top_gene_index]
+```
+
+## Covariate removal
+
+We further regress out the differences in unique UMI count, library size, and percentage of mitochondrial gene expression. As in the original study, we choose not to correct for donor batch or stimulation status as they contain genuine biological differences.
+
+```{r covar_removal, eval=FALSE}
+covariate_df <- data.frame(lib_size = combined_obj$nCount_RNA,
+                           umi_count = combined_obj$nFeature_RNA,
+                           percent_mt = combined_obj$percent_mt)
+dev_res_corrected <- covariate_removal(dev_res_filtered, covariate_df)
+
+scaled.gene_exp <- scale(dev_res_corrected)
+```
+
+## Inputs for GSFA
+
+The corrected and scaled gene expression matrix (24955 cells by 6000 genes) will be used as input for GSFA input argument `Y`. We annonate this matrix with cell and gene names so we can keep track.
+
+```{r eval=FALSE}
+sample_names <- colnames(combined_obj@assays$RNA@counts)
+gene_names <- rownames(combined_obj@assays$RNA@counts)
+rownames(scaled.gene_exp) <- sample_names
+colnames(scaled.gene_exp) <- gene_names[top_gene_index]
+```
+
+In addition, we have a cell by perturbation matrix containing gene-level perturbation conditions across cells for GSFA input argument `G`:
+
+```{r}
+G_mat <- combined_obj@meta.data[, 4:24]
+G_mat <- as.matrix(G_mat)
+```
+
+Here is the number of cells under each gene-level perturbation: 
+
+```{r num_cells}
+num_cells <- colSums(G_mat)
+num_cells_df <- data.frame(locus = names(num_cells),
+                           count = num_cells)
+ggplot(data = num_cells_df, aes(x=locus, y=count)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  labs(x = "Perturbation",
+       y = "Number of cells") +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size =11),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        panel.grid.minor = element_blank())
+```
+
+Last but not least, since we hypothesize that perturbations may have different effects in stimulated and unstimulated cells, we would like to apply our modified two-group GSFA model on the data, so that the perturbation effects can be estimated for cells under different stimulation conditions separately.
+
+Hence, we also need the cell group information as GSFA input argument `group` Here we assign all unstimulated cells to group 0, and all stimulated cells to group 1.
+```{r}
+# Cell group info:
+sample_group <- combined_obj$orig.ident
+sample_group <- (sample_group %in% c("TCells_D1S", "TCells_D2S")) * 1
+```
+
+The number of cells in each group:
+```{r results="markup"}
+table(sample_group)
+```
+
+# GSFA
+
+Now that we have all the inputs we need (`scaled.gene_exp`, `G_mat`, `sample_group`), we can perform GSFA (guided sparse factor analysis) on the data. 
+
+We use the modified GSFA model with two cell groups (implemented in `fit_gsfa_multivar_2groups()`), stratifying all cells by their stimulation states (unstimulated:0, stimulated:1). We specify 20 factors initialized from truncated SVD and run Gibbs sampling for 4000 iterations in total, with the posterior mean estimates computed over the last 1000 iterations of samples.
+
+(Due to the size of data, this was performed in two segments, each with 2000 Gibbs sampling iterations. More options for running GSFA are available in the `R/run_gsfa_TCells_2groups.R` script.)
+
+**This process is both time and memory intensive, and should be run in an R script separately, preferably on a high performance computing cluster that can guarantee 50GB memory and 6 (typically ~5.5) hours of runtime without interruption for each segment of run.**
+
+```{r eval=FALSE}
+# First segment of run (2k iterations):
+set.seed(92629)
+fit0 <- fit_gsfa_multivar_2groups(Y = scaled.gene_exp, G = G_mat, 
+                                  group = sample_group, K = 20,
+                                  prior_type = "mixture_normal", 
+                                  init.method = "svd",
+                                  niter = 2000, used_niter = 1000,
+                                  verbose = T, return_samples = T)
+```
+
+```{r eval=FALSE}
+# Second segment of run (2k iterations):
+set.seed(92629)
+fit <- fit_gsfa_multivar_2groups(Y = scaled.gene_exp, G = G_mat, 
+                                 group = sample_group, fit0 = fit0,
+                                 prior_type = "mixture_normal", 
+                                 init.method = "svd",
+                                 niter = 2000, used_niter = 1000,
+                                 verbose = T, return_samples = T)
+```
+
+# Session information
+
+```{r results="markup"}
+sessionInfo()
+```
