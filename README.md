@@ -23,3 +23,7 @@ research paper:
 [**Preprocessing of CROP-seq data and GSFA application**](https://gradonion.github.io/GSFA_paper/preprocess_and_gsfa_TCells.html);
 
 [**Interpretation of GSFA results**](https://gradonion.github.io/GSFA_paper/gsfa_result_interpret_TCells.html);
+
+### Check out our GSFA R package at
+
+[https://gradonion.github.io/GSFA/](https://gradonion.github.io/GSFA/).
