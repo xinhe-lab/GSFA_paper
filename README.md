@@ -6,7 +6,7 @@ research paper:
 > Yifan Zhou, Kaixuan Luo, Mengjie Chen and Xin He. 
 > A novel Bayesian factor analysis method improves detection of genes and 
 > biological processes affected by perturbations in single-cell CRISPR screening. 
-> [*bioRxiv* doi: 10.1101/2022.02.13.480282](https://www.biorxiv.org/content/10.1101/2022.02.13.480282v1) (2021).
+> [*bioRxiv* doi: 10.1101/2022.02.13.480282](https://www.biorxiv.org/content/10.1101/2022.02.13.480282v1) (2022).
 
 ### Introduction
 
