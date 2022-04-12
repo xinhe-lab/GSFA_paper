@@ -200,7 +200,7 @@ for (i in 1:ncol(PIP_mat)){
     WebGestaltR::WebGestaltR(enrichMethod = "ORA",
                              organism = "hsapiens",
                              enrichDatabase = enrich_db,
-                             interestGene = genes_df[PIP_mat[, i] > 0.05, ]$ID,
+                             interestGene = genes_df[PIP_mat[, i] > 0.95, ]$ID,
                              interestGeneType = "ensembl_gene_id",
                              referenceGene = genes_df$ID,
                              referenceGeneType = "ensembl_gene_id",
@@ -514,7 +514,7 @@ terms_of_interest_df <- left_join(terms_of_interest_df, signif_term_df,
                                   by = "description")
 ```
 
-Here are selected GO "biological process"" terms and their folds of enrichment in DEGs detected by GSFA (Figure S5E):  
+Here are selected GO "biological process" terms and their folds of enrichment in DEGs detected by GSFA (Figure S5E):  
 (In the code below, we omitted the content in `terms_of_interest_df` as one can subset the `enrich_table` with any terms of their choice.)
 
 ```{r Fig_S5E, fig.height=5.5, fig.width=8}
