@@ -25,9 +25,12 @@ rep <- opt$rep # from 1 to 500
 
 library(tidyverse)
 library(GSFA)
-seeds <- readRDS("../../simulations/simulation_results/1K_random_seeds.rds")
+seeds <- readRDS("../data/simulations/random_seeds.rds")
 dir.create(out_folder)
-out_file <- paste0(out_folder, "simulation_result.rep_", rep, ".rds")
+if (!endsWith(out_folder, "/")){
+  out_folder <- paste0(out_folder, "/")
+}
+out_file <- paste0(out_folder, "simulation_result.pi_", param_pi, ".rep_", rep, ".rds")
 print(paste0("Simulate the ", rep, "th rep of random count-based datasets and perform GSFA."))
 print(paste0("Results will be saved at ", out_file))
 
@@ -61,7 +64,7 @@ fit_normal <- fit_gsfa_multivar(Y = sim_data$Y, G = sim_data$G, K = 10,
                                 niter = 3000, used_niter = 1000,
                                 verbose = T, return_samples = F)
 
-fit_count <- fit_gsfa_multivar(Y = sim_data$scaled_data, G = sim_data$G, K = 10,
+fit_count <- fit_gsfa_multivar(Y = sim_data$scaled, G = sim_data$G, K = 10,
                                prior_type = "mixture_normal", init.method = "svd",
                                prior_w_s = 50, prior_w_r = 0.2,
                                prior_beta_s = 5, prior_beta_r = 0.2,
