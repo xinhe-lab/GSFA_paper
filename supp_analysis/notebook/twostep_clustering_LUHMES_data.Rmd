@@ -1,0 +1,405 @@
+---
+title: "Two-step clustering analysis on LUHMES CROP-seq data"
+author: "Kaixuan Luo"
+date: "2022-08-10"
+output:
+  workflowr::wflow_html:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+```{r knitr-opts, include=FALSE}
+knitr::opts_chunk$set(results = "hold", fig.align = "center", message=FALSE, warning=FALSE)
+```
+
+```{bash, include=FALSE, eval=FALSE}
+mkdir -p /project2/xinhe/kevinluo/GSFA/data
+
+cp /project2/xinhe/yifan/Factor_analysis/shared_data/LUHMES_cropseq_data_seurat.rds \
+  /project2/xinhe/kevinluo/GSFA/data
+
+cp /project2/xinhe/yifan/Factor_analysis/LUHMES/GSE142078_raw/GSM4219575_Run1_genes.tsv.gz \
+  /project2/xinhe/kevinluo/GSFA/data/LUHMES_GSM4219575_Run1_genes.tsv.gz
+```
+
+Scripts for running the analysis: `code/run_twostep_clustering_LUHMES_data.R`
+
+```{bash, include=FALSE, eval=FALSE}
+sbatch --mem=40G ~/projects/GSFA_analysis/code/run_twostep_clustering_LUHMES_data.sbatch
+```
+
+
+## Load the data sets
+
+CROP-seq datasets: `/project2/xinhe/yifan/Factor_analysis/shared_data/LUHMES_cropseq_data_seurat.rds`
+
+The data are Seurat objects, with raw gene counts stored in `obj@assays$RNA@counts`, 
+and cell meta data stored in `obj@meta.data`.
+Normalized and scaled data used for GSFA are stored in `obj@assays$RNA@scale.data`, 
+the rownames of which are the 6k genes used for GSFA.
+
+Load packages
+```{r load-packages, message=FALSE, warning=FALSE}
+suppressPackageStartupMessages(library(data.table))
+dyn.load('/software/geos-3.7.0-el7-x86_64/lib64/libgeos_c.so') # attach the geos lib for Seurat
+suppressPackageStartupMessages(library(Seurat))
+suppressPackageStartupMessages(library(ComplexHeatmap))
+suppressPackageStartupMessages(library(ggplot2))
+require(reshape2)
+require(dplyr)
+require(ComplexHeatmap)
+theme_set(theme_bw() + theme(plot.title = element_text(size = 14, hjust = 0.5),
+                             axis.title = element_text(size = 14),
+                             axis.text = element_text(size = 13),
+                             legend.title = element_text(size = 13),
+                             legend.text = element_text(size = 12),
+                             panel.grid.minor = element_blank())
+)
+suppressPackageStartupMessages(library(gridExtra))
+source("code/plotting_functions.R")
+```
+
+Set directories
+```{r dir}
+data_dir <- "/project2/xinhe/kevinluo/GSFA/data/"
+res_dir <- "/project2/xinhe/kevinluo/GSFA/twostep_clustering/LUHMES/"
+dir.create(res_dir, recursive = TRUE, showWarnings = FALSE)
+```
+
+## Load two-step clustering analysis result
+
+```{r}
+combined_obj <- readRDS(file.path(res_dir, "LUHMES_seurat_clustered.rds"))
+```
+
+## Associate perturbations with clusters
+
+```{r associate-perturbs-clusters}
+perturb_matrix <- combined_obj@meta.data[, 4:18]
+
+cluster_labels <- Idents(combined_obj)
+cluster_labels <- as.factor(as.numeric(as.character(cluster_labels))+1)
+new_cluster_labels <- paste0("k", levels(cluster_labels))
+names(new_cluster_labels) <- levels(combined_obj)
+combined_obj <- RenameIdents(combined_obj, new_cluster_labels)
+
+cluster_matrix <- matrix(0, nrow = nrow(perturb_matrix), ncol = length(levels(cluster_labels)))
+cluster_matrix[cbind(1:nrow(perturb_matrix), cluster_labels)] <- 1
+rownames(cluster_matrix) <- rownames(perturb_matrix)
+colnames(cluster_matrix) <- new_cluster_labels
+```
+
+Use Chi-squared tests for the association of perturbations and clusters (2 x 2 tables)
+```{r chisq-test}
+summary_df <- expand.grid(colnames(perturb_matrix), colnames(cluster_matrix))
+colnames(summary_df) <- c("perturb", "cluster")
+
+summary_df <- cbind(summary_df, statistic = NA, stdres = NA, pval = NA)
+
+for(i in 1:nrow(summary_df)){
+  dt <- table(data.frame(perturb = perturb_matrix[,summary_df$perturb[i]], 
+                         cluster = cluster_matrix[,summary_df$cluster[i]]))
+  chisq <- chisq.test(dt)
+  summary_df[i, ]$statistic <- chisq$statistic
+  summary_df[i, ]$stdres <- chisq$stdres[2,2]
+  summary_df[i, ]$pval <- chisq$p.value
+}
+
+summary_df$fdr <- p.adjust(summary_df$pval, method = "BH")
+summary_df$bonferroni_adj <- p.adjust(summary_df$pval, method = "bonferroni")
+
+# saveRDS(summary_df, file = file.path(res_dir, "LUHMES_seurat_guide_cluster_chisq_summary_df.rds"))
+
+stdres_mat <- reshape2::dcast(summary_df %>% dplyr::select(perturb, cluster, stdres), perturb ~ cluster, value.var = "stdres")
+rownames(stdres_mat) <- stdres_mat$perturb
+stdres_mat$perturb <- NULL
+
+fdr_mat <- reshape2::dcast(summary_df %>% dplyr::select(perturb, cluster, fdr), perturb ~ cluster, value.var = "fdr")
+rownames(fdr_mat) <- fdr_mat$perturb
+fdr_mat$perturb <- NULL
+
+bonferroni_mat <- reshape2::dcast(summary_df %>% dplyr::select(perturb, cluster, bonferroni_adj), 
+                                  perturb ~ cluster, value.var = "bonferroni_adj")
+rownames(bonferroni_mat) <- bonferroni_mat$perturb
+bonferroni_mat$perturb <- NULL
+```
+
+```{r stdres-fdr-dotplot, eval=TRUE, fig.width=9, fig.height=5.5}
+KO_names <- rownames(fdr_mat)
+dotplot_effectsize(t(stdres_mat), t(fdr_mat),
+                   reorder_markers = c(KO_names[KO_names!="Nontargeting"], "Nontargeting"),
+                   color_lgd_title = "Chi-squared test\nstandardized residuals",
+                   size_lgd_title = "FDR",
+                   max_score = 4,
+                   min_score = -4,
+                   by_score = 2) + coord_flip()
+```
+
+Plot perturbation ~ cluster associations (show Bonferroni adjusted p-values)
+```{r stdres-bonferroni-dotplot, eval=TRUE, fig.width=9, fig.height=5.5}
+KO_names <- rownames(bonferroni_mat)
+dotplot_effectsize(t(stdres_mat), t(bonferroni_mat),
+                   reorder_markers = c(KO_names[KO_names!="Nontargeting"], "Nontargeting"),
+                   color_lgd_title = "Chi-squared test\nstandardized residuals",
+                   size_lgd_title = "Bonferroni\nadjusted p-value",
+                   max_score = 4,
+                   min_score = -4,
+                   by_score = 2) + coord_flip()
+```
+
+## Find DE genes for each cluster and assign DE genes to associated perturbations
+
+First, find DE genes for each cluster using MAST (Bonferroni adjusted p-values < 0.05),
+Then, for each perturbation, find the associated clusters, and pull the DE genes for those clusters.
+
+```{r get-de-genes}
+feature.names <- data.frame(fread(file.path(data_dir, "LUHMES_GSM4219575_Run1_genes.tsv.gz"),
+                                  header = FALSE), stringsAsFactors = FALSE)
+
+de.markers <- readRDS(file.path(res_dir, "LUHMES_seurat_MAST_DEGs.rds"))
+names(de.markers) <- paste0("k", levels(cluster_labels))
+
+de.genes.clusters <- vector("list", length = length(de.markers))
+names(de.genes.clusters) <- names(de.markers)
+for( i in 1:length(de.genes.clusters)){
+  de_sumstats <- de.markers[[i]]
+  de_genes <- unique(rownames(de_sumstats[de_sumstats$p_val_adj < 0.05,]))
+  # de_genes <- feature.names$V2[match(de_genes, feature.names$V1)]
+  de.genes.clusters[[i]] <- de_genes
+}
+```
+
+
+Number of DE genes for each perturbation (Chi-squared test FDR < 0.05)
+```{r count-de-genes-fdr, fig.width=13, fig.height=5}
+perturb_names <- colnames(perturb_matrix)
+perturb_names <- c("Nontargeting", perturb_names[perturb_names!="Nontargeting"])
+
+de.genes.perturbs <- vector("list", length = length(perturb_names))
+names(de.genes.perturbs) <- perturb_names
+
+for(i in 1:length(de.genes.perturbs)){
+  perturb_name <- names(de.genes.perturbs)[i]
+  associated_cluster_labels <- colnames(fdr_mat)[which(fdr_mat[perturb_name, ] < 0.05)]
+  if(length(associated_cluster_labels) > 0){
+    de.genes.perturbs[[i]] <- unique(unlist(de.genes.clusters[associated_cluster_labels]))
+  }
+}
+
+num.de.genes.perturbs <- sapply(de.genes.perturbs, length)
+
+twostep_clustering_fdr0.05_genes <- de.genes.perturbs
+
+dge_plot_df <- data.frame(Perturbation = names(num.de.genes.perturbs), Num_DEGs = num.de.genes.perturbs)
+dge_plot_df$Perturbation <- factor(dge_plot_df$Perturbation, levels = names(num.de.genes.perturbs))
+
+ggplot(data=dge_plot_df, aes(x = Perturbation, y = Num_DEGs+1)) +
+  geom_bar(position = "dodge", stat = "identity") +
+  geom_text(aes(label = Num_DEGs), position=position_dodge(width=0.9), vjust=-0.25) +
+  scale_y_log10() +
+  scale_fill_brewer(palette = "Set2") +
+  labs(x = "Target gene",
+       y = "Number of DEGs",
+       title = "Number of DEGs detected by Two-step clustering with MAST DE analysis") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        legend.position = "bottom",
+        legend.text = element_text(size = 13))
+```
+
+Number of DE genes for each perturbation (Chi-squared test Bonferroni adjusted p-value < 0.05)
+```{r count-de-genes-bonferroni, fig.width=13, fig.height=5}
+
+perturb_names <- colnames(perturb_matrix)
+perturb_names <- c("Nontargeting", perturb_names[perturb_names!="Nontargeting"])
+
+de.genes.perturbs <- vector("list", length = length(perturb_names))
+names(de.genes.perturbs) <- perturb_names
+
+for(i in 1:length(de.genes.perturbs)){
+  perturb_name <- names(de.genes.perturbs)[i]
+  associated_cluster_labels <- colnames(bonferroni_mat)[which(bonferroni_mat[perturb_name, ] < 0.05)]
+  if(length(associated_cluster_labels) > 0){
+    de.genes.perturbs[[i]] <- unique(unlist(de.genes.clusters[associated_cluster_labels]))
+  }
+}
+
+num.de.genes.perturbs <- sapply(de.genes.perturbs, length)
+
+twostep_clustering_bonferroni0.05_genes <- de.genes.perturbs
+
+dge_plot_df <- data.frame(Perturbation = names(num.de.genes.perturbs), Num_DEGs = num.de.genes.perturbs)
+dge_plot_df$Perturbation <- factor(dge_plot_df$Perturbation, levels = names(num.de.genes.perturbs))
+
+ggplot(data=dge_plot_df, aes(x = Perturbation, y = Num_DEGs+1)) +
+  geom_bar(position = "dodge", stat = "identity") +
+  geom_text(aes(label = Num_DEGs), position=position_dodge(width=0.9), vjust=-0.25) +
+  scale_y_log10() +
+  scale_fill_brewer(palette = "Set2") +
+  labs(x = "Target gene",
+       y = "Number of DEGs",
+       title = "Number of DEGs detected by Two-step clustering with MAST DE analysis") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        legend.position = "bottom",
+        legend.text = element_text(size = 13))
+```
+
+
+## Compare single-gene DE p-value distributions between two-step clustering analysis and GSFA
+
+```{r}
+fdr_cutoff <- 0.05
+lfsr_cutoff <- 0.05
+```
+
+Load the output of GSFA `fit_gsfa_multivar()` run. 
+```{r}
+data_folder <- "/project2/xinhe/yifan/Factor_analysis/LUHMES/"
+fit <- readRDS(paste0(data_folder,
+                      "gsfa_output_detect_01/use_negctrl/All.gibbs_obj_k20.svd_negctrl.seed_14314.light.rds"))
+gibbs_PM <- fit$posterior_means
+lfsr_mat <- fit$lfsr[, -ncol(fit$lfsr)]
+total_effect <- fit$total_effect[, -ncol(fit$total_effect)]
+KO_names <- colnames(lfsr_mat)
+```
+
+DEGs detected by GSFA
+```{r echo=FALSE}
+gsfa_sig_genes <- apply(lfsr_mat, 2, function(x){names(x)[x < lfsr_cutoff]})
+
+sapply(gsfa_sig_genes, length)
+```
+
+Load MAST single-gene DE result
+```{r mast}
+guides <- KO_names[KO_names!="Nontargeting"]
+
+mast_list <- list()
+for (m in guides){
+  fname <- paste0(data_folder, "processed_data/MAST/dev_top6k_negctrl/gRNA_", m, ".dev_res_top6k.vs_negctrl.rds")
+  tmp_df <- readRDS(fname)
+  tmp_df$geneID <- rownames(tmp_df)
+  tmp_df <- tmp_df %>% dplyr::rename(FDR = fdr, PValue = pval)
+  mast_list[[m]] <- tmp_df
+}
+mast_signif_counts <- sapply(mast_list, function(x){filter(x, FDR < fdr_cutoff) %>% nrow()})
+```
+
+QQ-plots of MAST DE p-values for the GSFA significant genes vs two-step clustering DE genes.
+```{r qqplots-gsfa-tsc-all, fig.width=12, fig.height=8}
+qqplots <- list()
+for(i in 1:length(guides)){
+  guide <- guides[i]
+  mast_res <- mast_list[[guide]]
+  tsc_de_genes <- twostep_clustering_fdr0.05_genes[[guide]]
+  gsfa_de_genes <- gsfa_sig_genes[[guide]]
+  tsc_de_genes <- intersect(tsc_de_genes, rownames(mast_res))
+  gsfa_de_genes <- intersect(gsfa_de_genes, rownames(mast_res))
+  
+  if(length(tsc_de_genes)>0 && length(gsfa_de_genes) >0){
+    mast_res$tsc_gene <- 0
+    mast_res[tsc_de_genes, ]$tsc_gene <- 1
+    mast_res$gsfa_gene <- 0
+    mast_res[gsfa_de_genes, ]$gsfa_gene <- 1
+    pvalue_list <- list('Two-step clustering'=dplyr::filter(mast_res,tsc_gene==1)$PValue,
+                        'GSFA'=dplyr::filter(mast_res,gsfa_gene==1)$PValue,
+                        'all genes'=mast_res$PValue)
+    qqplots[[guide]] <- qqplot.pvalue(pvalue_list, pointSize = 1, legendSize = 4) + 
+      ggtitle(guide) + theme(plot.title = element_text(hjust = 0.5)) +
+      scale_colour_discrete(name="Method")
+  }
+}
+
+grid.arrange(grobs = qqplots, nrow = 2, ncol = 2)
+```
+
+Pooling p-values from all perturbations
+```{r qqplots-gsfa-tsc-all-combined, dev=c('png', 'pdf'), fig.width=8, fig.height=6}
+combined_mast_res <- data.frame()
+for(i in 1:length(guides)){
+  guide <- guides[i]
+  mast_res <- mast_list[[guide]]
+  tsc_de_genes <- twostep_clustering_fdr0.05_genes[[guide]]
+  gsfa_de_genes <- gsfa_sig_genes[[guide]]
+  tsc_de_genes <- intersect(tsc_de_genes, rownames(mast_res))
+  gsfa_de_genes <- intersect(gsfa_de_genes, rownames(mast_res))
+  mast_res$tsc_gene <- 0
+  if(length(tsc_de_genes) >0){
+    mast_res[tsc_de_genes, ]$tsc_gene <- 1
+  }
+  mast_res$gsfa_gene <- 0
+  if(length(gsfa_de_genes) >0){
+    mast_res[gsfa_de_genes, ]$gsfa_gene <- 1
+  }
+  combined_mast_res <- rbind(combined_mast_res, mast_res)
+}
+
+pvalue_list <- list('Two-step clustering'=dplyr::filter(combined_mast_res,tsc_gene==1)$PValue,
+                    'GSFA'=dplyr::filter(combined_mast_res,gsfa_gene==1)$PValue,
+                    'all genes'=combined_mast_res$PValue)
+
+qqplot.pvalue(pvalue_list, pointSize = 1, legendSize = 4) + 
+      ggtitle("") + theme(plot.title = element_text(hjust = 0.5)) +
+      scale_colour_discrete(name="Method")
+```
+
+QQ-plots of MAST DE p-values for the GSFA only genes vs two-step only genes.
+```{r qqplots-gsfa-tsc-only, fig.width=12, fig.height=8}
+qqplots <- list()
+for(i in 1:length(guides)){
+  guide <- guides[i]
+  mast_res <- mast_list[[guide]]
+  tsc_de_genes <- twostep_clustering_fdr0.05_genes[[guide]]
+  gsfa_de_genes <- gsfa_sig_genes[[guide]]
+  tsc_de_genes <- intersect(tsc_de_genes, rownames(mast_res))
+  gsfa_de_genes <- intersect(gsfa_de_genes, rownames(mast_res))
+  
+  if(length(tsc_de_genes)>0 && length(gsfa_de_genes) >0){
+    mast_res$tsc_only_gene <- 0
+    mast_res[setdiff(tsc_de_genes, gsfa_de_genes), ]$tsc_only_gene <- 1
+    mast_res$gsfa_only_gene <- 0
+    mast_res[setdiff(gsfa_de_genes, tsc_de_genes), ]$gsfa_only_gene <- 1
+    
+    pvalue_list <- list('Two-step clustering only'=dplyr::filter(mast_res,tsc_only_gene==1)$PValue,
+                        'GSFA only'=dplyr::filter(mast_res,gsfa_only_gene==1)$PValue,
+                        'all genes'=mast_res$PValue)
+    qqplots[[guide]] <- qqplot.pvalue(pvalue_list, pointSize = 1, legendSize = 4) + 
+      ggtitle(guide) + theme(plot.title = element_text(hjust = 0.5)) +
+      scale_colour_discrete(name="Method")
+
+  }
+}
+
+grid.arrange(grobs = qqplots, nrow = 2, ncol = 2)
+```
+
+Pooling p-values from all perturbations
+```{r qqplots-gsfa-tsc-only-combined, dev=c('png', 'pdf'), fig.width=8, fig.height=6}
+combined_mast_res <- data.frame()
+for(i in 1:length(guides)){
+  guide <- guides[i]
+  mast_res <- mast_list[[guide]]
+  tsc_de_genes <- twostep_clustering_fdr0.05_genes[[guide]]
+  gsfa_de_genes <- gsfa_sig_genes[[guide]]
+  tsc_de_genes <- intersect(tsc_de_genes, rownames(mast_res))
+  gsfa_de_genes <- intersect(gsfa_de_genes, rownames(mast_res))
+  mast_res$tsc_only_gene <- 0
+  if(length(setdiff(tsc_de_genes, gsfa_de_genes)) >0){
+    mast_res[setdiff(tsc_de_genes, gsfa_de_genes), ]$tsc_only_gene <- 1
+  }
+  mast_res$gsfa_only_gene <- 0
+  if(length(setdiff(gsfa_de_genes, tsc_de_genes)) >0){
+    mast_res[setdiff(gsfa_de_genes, tsc_de_genes), ]$gsfa_only_gene <- 1
+  }
+  combined_mast_res <- rbind(combined_mast_res, mast_res)
+}
+
+pvalue_list <- list('Two-step clustering only'=dplyr::filter(combined_mast_res,tsc_only_gene==1)$PValue,
+                    'GSFA only'=dplyr::filter(combined_mast_res,gsfa_only_gene==1)$PValue,
+                    'all genes'=combined_mast_res$PValue)
+
+qqplot.pvalue(pvalue_list, pointSize = 1, legendSize = 4) + 
+      ggtitle("") + theme(plot.title = element_text(hjust = 0.5)) +
+      scale_colour_discrete(name="Method")
+```
+

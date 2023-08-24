@@ -1,0 +1,320 @@
+---
+title: "Run SCEPTRE on CD8+ T Cell (stimulated and unstimulated) CROP-seq data"
+author: "Kaixuan Luo"
+date: "2022-05-25"
+output: workflowr::wflow_html
+editor_options:
+  chunk_output_type: console
+---
+
+```{r knitr-opts, include=FALSE}
+knitr::opts_chunk$set(comment = "#",collapse = TRUE,results = "hold",
+                      fig.align = "center",dpi = 120)
+```
+
+## About the data sets
+
+CROP-seq datasets: `/project2/xinhe/yifan/Factor_analysis/shared_data/`
+
+The data are Seurat objects, with raw gene counts stored in `obj@assays$RNA@counts`, 
+and cell meta data stored in `obj@meta.data`.
+Normalized and scaled data used for GSFA are stored in `obj@assays$RNA@scale.data`, 
+the rownames of which are the 6k genes used for GSFA.
+
+## Analysis
+
+Scripts for running the analysis: `code/sceptre_analysis.R`, `code/sceptre_permute_analysis.R`
+```{bash, include=FALSE, eval=FALSE}
+# T cells stimulated data
+sbatch --mem=50G --cpus-per-task=10 ~/projects/GSFA_analysis/code/run_sceptre_Tcells_stimulated_data.sbatch
+
+# T cells unstimulated data
+sbatch --mem=50G --cpus-per-task=10 ~/projects/GSFA_analysis/code/run_sceptre_Tcells_unstimulated_data.sbatch
+```
+
+```{bash, include=FALSE, eval=FALSE}
+# Permutation analysis of T cells stimulated data
+for i in {1..10}
+do
+  sbatch --mem=50G --cpus-per-task=10 ~/projects/GSFA_analysis/code/run_sceptre_permuted_data.sbatch \
+  /project2/xinhe/kevinluo/GSFA/sceptre_analysis/TCells_cropseq_data_updated_covariates/simulated_data  i
+done
+```
+
+Load packages
+```{r, message=FALSE, warning=FALSE}
+dyn.load('/software/geos-3.7.0-el7-x86_64/lib64/libgeos_c.so') # attach the geos lib for Seurat
+suppressPackageStartupMessages(library(tidyverse))
+library(cowplot)
+library(Matrix)
+library(sceptre)
+library(Seurat)
+source("code/plotting_functions.R")
+```
+
+### Prepare input data for SCEPTRE
+
+Load the T Cells CROP-seq data
+```{r load-data}
+TCells_data <- readRDS('/project2/xinhe/yifan/Factor_analysis/shared_data/TCells_cropseq_data_seurat.rds')
+```
+
+We first prepare three separate data objects required to run SCEPTRE: 
+the gene expression matrix, the perturbation matrix, and the covariate matrix.
+
+Separate stimulated and unstimulated cells into two data sets, and run those separately.
+```{r cell-covariate-matrix}
+metadata <- TCells_data@meta.data
+metadata[1:5, ]
+
+table(metadata$orig.ident)
+
+stimulated_cells <- rownames(metadata)[which(endsWith(metadata$orig.ident, "S"))]
+cat(length(stimulated_cells), "stimulated cells. \n")
+unstimulated_cells <- rownames(metadata)[which(endsWith(metadata$orig.ident, "N"))]
+cat(length(unstimulated_cells), "unstimulated cells. \n")
+```
+
+#### Stimulated T cells
+
+We first prepare three separate data objects required to run SCEPTRE: 
+the gene expression matrix, the perturbation matrix, and the covariate matrix.
+
+1. Gene expression matrices
+Gene expression (gene-by-cell) raw count matrix
+```{r stimulated-exp-matrix}
+gene_matrix <- TCells_data@assays$RNA@counts[, stimulated_cells]
+# gene-by-cell expression matrix
+gene_matrix[1:5, 1:3]
+dim(gene_matrix)
+```
+
+2. Covariate matrix
+```{r stimulated-covariate-matrix}
+# covariate_matrix <- metadata[stimulated_cells, c('nCount_RNA', 'nFeature_RNA', 'percent_mt', 'gRNA_umi_count')]
+covariate_matrix <- metadata[stimulated_cells, c('nCount_RNA', 'nFeature_RNA', 'percent_mt')]
+covariate_matrix[1:5,]
+dim(covariate_matrix)
+```
+
+3. Perturbation matrix (a binary matrix of perturbations,  rows are gRNA groups and columns are cell barcodes)
+```{r stimulated-perturbation-matrix}
+combined_perturbation_matrix <- t(metadata[stimulated_cells, 4:24])
+combined_perturbation_matrix[1:5,1:3]
+dim(combined_perturbation_matrix)
+range(combined_perturbation_matrix)
+```
+
+Specify the gene-gRNA group pairs to test for association
+
+We include the genes used for GSFA in this analysis
+```{r}
+# Normalized and scaled data used for GSFA, the rownames of which are the 6k genes used for GSFA
+scaled_gene_matrix <- TCells_data@assays$RNA@scale.data
+dim(scaled_gene_matrix)
+selected_gene_ids <- rownames(scaled_gene_matrix)
+
+gRNA_groups <- rownames(combined_perturbation_matrix)
+pairs <- expand.grid(selected_gene_ids, gRNA_groups)
+gene_gRNA_group_pairs <- data.frame(gene_id = pairs$Var1, gRNA_group = pairs$Var2, pair_type = "candidate")
+gene_gRNA_group_pairs[gene_gRNA_group_pairs$gRNA_group == "NonTarget", "pair_type"] <- "negative_control"
+table(gene_gRNA_group_pairs$pair_type)
+table(gene_gRNA_group_pairs$gRNA_group)
+dim(gene_gRNA_group_pairs)
+```
+
+```{r, eval=FALSE}
+datadir <- '/project2/xinhe/kevinluo/GSFA/sceptre_analysis/TCells_cropseq_data_updated_covariates/simulated_data'
+if(!dir.exists(datadir)) dir.create(datadir, recursive = TRUE)
+save(list = c("gene_matrix", "combined_perturbation_matrix", "covariate_matrix"),
+     file = file.path(datadir, 'data.matrices.RData'))
+saveRDS(gene_gRNA_group_pairs, file.path(datadir, "gene.gRNA.group.pairs.rds"))
+```
+
+
+#### Unstimulated T cells
+
+1. Gene expression matrices
+Gene expression (gene-by-cell) raw count matrix
+```{r unstimulated-exp-matrix}
+gene_matrix <- TCells_data@assays$RNA@counts[, unstimulated_cells]
+# gene-by-cell expression matrix
+gene_matrix[1:5, 1:3]
+dim(gene_matrix)
+```
+
+2. Covariate matrix
+```{r unstimulated-covariate-matrix}
+# covariate_matrix <- metadata[unstimulated_cells, c('nCount_RNA', 'nFeature_RNA', 'percent_mt', 'gRNA_umi_count')]
+covariate_matrix <- metadata[unstimulated_cells, c('nCount_RNA', 'nFeature_RNA', 'percent_mt')]
+covariate_matrix[1:5,]
+dim(covariate_matrix)
+```
+
+3. Perturbation matrix (a binary matrix of perturbations,  rows are gRNA groups and columns are cell barcodes)
+```{r unstimulated-perturbation-matrix}
+combined_perturbation_matrix <- t(metadata[unstimulated_cells, 4:24])
+combined_perturbation_matrix[1:5,1:3]
+dim(combined_perturbation_matrix)
+range(combined_perturbation_matrix)
+```
+
+
+```{r, eval=FALSE}
+datadir <- '/project2/xinhe/kevinluo/GSFA/sceptre_analysis/TCells_cropseq_data_updated_covariates/unsimulated_data'
+if(!dir.exists(datadir)) dir.create(datadir, recursive = TRUE)
+save(list = c("gene_matrix", "combined_perturbation_matrix", "covariate_matrix"),
+     file = file.path(datadir, 'data.matrices.RData'))
+saveRDS(gene_gRNA_group_pairs, file.path(datadir, "gene.gRNA.group.pairs.rds"))
+```
+
+
+### Run SCEPTRE
+
+#### Stimulated T cells
+```{r load-stimulated-input-data}
+datadir <- '/project2/xinhe/kevinluo/GSFA/sceptre_analysis/TCells_cropseq_data/simulated_data'
+load(file.path(datadir, "data.matrices.RData"))
+gene_gRNA_group_pairs <- readRDS(file.path(datadir, "gene.gRNA.group.pairs.rds"))
+
+cat(sprintf('Dimenstion of gene expression matrix: %d rows %d columns.\n', nrow(gene_matrix), ncol(gene_matrix)))
+cat(sprintf('Dimenstion of combined perturbation matrix: %d rows %d columns.\n', nrow(combined_perturbation_matrix), ncol(combined_perturbation_matrix)))
+cat(sprintf('Dimenstion of covariate matrix: %d rows %d columns.\n', nrow(covariate_matrix), ncol(covariate_matrix)))
+cat(sprintf('Dimenstion of gene gRNA-group pairs: %d rows %d columns.\n', nrow(gene_gRNA_group_pairs), ncol(gene_gRNA_group_pairs)))
+
+table(gene_gRNA_group_pairs$pair_type)
+```
+
+```{r run-sceptre-stimulated-data, eval=FALSE}
+result <- run_sceptre_high_moi(gene_matrix = gene_matrix,
+                               combined_perturbation_matrix = combined_perturbation_matrix,
+                               covariate_matrix = covariate_matrix,
+                               gene_gRNA_group_pairs = gene_gRNA_group_pairs,
+                               side = "both",
+                               storage_dir = outdir, 
+                               full_output = FALSE)
+
+outdir <- '/project2/xinhe/kevinluo/GSFA/sceptre_analysis/TCells_cropseq_data/simulated_data/sceptre_output'
+saveRDS(result, file.path(outdir, 'sceptre.result.rds'))
+```
+
+#### Unstimulated T cells
+```{r load-unstimulated-input-data}
+datadir <- '/project2/xinhe/kevinluo/GSFA/sceptre_analysis/TCells_cropseq_data/unsimulated_data'
+load(file.path(datadir, "data.matrices.RData"))
+gene_gRNA_group_pairs <- readRDS(file.path(datadir, "gene.gRNA.group.pairs.rds"))
+
+cat(sprintf('Dimenstion of gene expression matrix: %d rows %d columns.\n', nrow(gene_matrix), ncol(gene_matrix)))
+cat(sprintf('Dimenstion of combined perturbation matrix: %d rows %d columns.\n', nrow(combined_perturbation_matrix), ncol(combined_perturbation_matrix)))
+cat(sprintf('Dimenstion of covariate matrix: %d rows %d columns.\n', nrow(covariate_matrix), ncol(covariate_matrix)))
+cat(sprintf('Dimenstion of gene gRNA-group pairs: %d rows %d columns.\n', nrow(gene_gRNA_group_pairs), ncol(gene_gRNA_group_pairs)))
+
+table(gene_gRNA_group_pairs$pair_type)
+```
+
+```{r run-sceptre-unstimulated-data, eval=FALSE}
+result <- run_sceptre_high_moi(gene_matrix = gene_matrix,
+                               combined_perturbation_matrix = combined_perturbation_matrix,
+                               covariate_matrix = covariate_matrix,
+                               gene_gRNA_group_pairs = gene_gRNA_group_pairs,
+                               side = "both",
+                               storage_dir = outdir, 
+                               full_output = FALSE)
+
+outdir <- '/project2/xinhe/kevinluo/GSFA/sceptre_analysis/TCells_cropseq_data/unsimulated_data/sceptre_output'
+saveRDS(result, file.path(outdir, 'sceptre.result.rds'))
+```
+
+### Analyze the results
+
+#### Stimulated T cells
+
+```{r load-stimulated-result}
+outdir <- '/project2/xinhe/kevinluo/GSFA/sceptre_analysis/TCells_cropseq_data/simulated_data/sceptre_output'
+simulated_result <- readRDS(file.path(outdir, 'sceptre.result.rds'))
+head(simulated_result, 10)
+```
+
+Negative control pairs
+```{r neg-control-stimulated,  fig.width=5, fig.height=5}
+neg_control_p_vals <- simulated_result %>% filter(pair_type == "negative_control") %>% pull(p_value)
+qq_plot <- make_qq_plot(neg_control_p_vals)
+plot(qq_plot)
+```
+
+Candidate pairs
+```{r fdr-stimulated}
+simulated_candidate_pair_results <- simulated_result %>% filter(pair_type == "candidate") %>%
+  mutate(p_val_adj = p.adjust(p_value, method = "BH"))
+```
+
+```{r candidate-stimulated-qqplot, fig.width=5, fig.height=5}
+simulated_candidate_pvals <- simulated_candidate_pair_results %>% pull(p_value)
+make_qq_plot(simulated_candidate_pvals)
+```
+
+```{r select-sig-pairs-stimulated}
+simulated_discovery_set <- simulated_candidate_pair_results %>% filter(p_val_adj <= 0.1)
+head(simulated_discovery_set)
+```
+
+```{r}
+saveRDS(simulated_candidate_pair_results, file.path(outdir, 'sceptre.candidate.pair.results.rds'))
+saveRDS(simulated_discovery_set, file.path(outdir, 'sceptre.discovery.set.results.rds'))
+```
+
+#### Unstimulated T cells
+
+```{r load-unstimulated-result}
+outdir <- '/project2/xinhe/kevinluo/GSFA/sceptre_analysis/TCells_cropseq_data/unsimulated_data/sceptre_output'
+unsimulated_result <- readRDS(file.path(outdir, 'sceptre.result.rds'))
+head(unsimulated_result, 10)
+```
+
+Negative control pairs
+```{r neg-control-unstimulated,  fig.width=5, fig.height=5}
+neg_control_p_vals <- unsimulated_result %>% filter(pair_type == "negative_control") %>% pull(p_value)
+qq_plot <- make_qq_plot(neg_control_p_vals)
+plot(qq_plot)
+```
+
+Candidate pairs
+```{r fdr-unstimulated}
+unsimulated_candidate_pair_results <- unsimulated_result %>% filter(pair_type == "candidate") %>%
+  mutate(p_val_adj = p.adjust(p_value, method = "BH"))
+```
+
+```{r candidate-unstimulated-qqplot, fig.width=5, fig.height=5}
+unsimulated_candidate_pvals <- unsimulated_candidate_pair_results %>% pull(p_value)
+make_qq_plot(unsimulated_candidate_pvals)
+```
+
+```{r select-sig-pairs-unstimulated}
+unsimulated_discovery_set <- unsimulated_candidate_pair_results %>% filter(p_val_adj <= 0.1)
+head(unsimulated_discovery_set)
+```
+
+```{r}
+saveRDS(unsimulated_candidate_pair_results, file.path(outdir, 'sceptre.candidate.pair.results.rds'))
+saveRDS(unsimulated_discovery_set, file.path(outdir, 'sceptre.discovery.set.results.rds'))
+```
+
+
+## Permutation analysis of stimulated data
+
+Pool results from permutation data sets
+```{r}
+outdir <- "/project2/xinhe/kevinluo/GSFA/sceptre_analysis/TCells_data_updated/simulated_data/sceptre_output/permutation"
+sceptre_res <- data.frame()
+for(permute_num in 1:10){
+  res_dir <- paste0(outdir, "/perm_", permute_num)
+  res <- readRDS(file.path(res_dir, 'sceptre.result.rds'))
+  sceptre_res <- rbind(sceptre_res, data.frame(permute_num = permute_num, res))
+}
+```
+
+```{r permutation-qqplot, fig.width=5, fig.height=5}
+candidate_p_vals <- sceptre_res %>% filter(pair_type == "candidate") %>% pull(p_value)
+qqunif.plot(candidate_p_vals, main = "SCEPTRE (permutation)")
+```
+

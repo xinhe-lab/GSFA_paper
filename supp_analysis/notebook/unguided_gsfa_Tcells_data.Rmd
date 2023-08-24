@@ -1,0 +1,456 @@
+---
+title: "Unguided GSFA analysis on T cells CROP-seq data"
+author: "Kaixuan Luo"
+date: "2022-08-20"
+output:
+  workflowr::wflow_html:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+```{r knitr-opts, include=FALSE}
+knitr::opts_chunk$set(results = "hold", fig.align = "center", message=FALSE, warning=FALSE)
+```
+
+```{bash, include=FALSE, eval=FALSE}
+mkdir -p /project2/xinhe/kevinluo/GSFA/data
+
+cp /project2/xinhe/yifan/Factor_analysis/Stimulated_T_Cells/processed_data/deviance_residual.all_T_cells_merged_top_6k.batch_uncorrected.rds \
+  /project2/xinhe/kevinluo/GSFA/unguided_GSFA/Stimulated_T_Cells/processed_data/deviance_residual.all_T_cells_merged_top_6k.batch_uncorrected.rds
+
+cp /project2/xinhe/yifan/Factor_analysis/Stimulated_T_Cells/processed_data/metadata.all_T_cells_merged.rds \
+  /project2/xinhe/kevinluo/GSFA/unguided_GSFA/Stimulated_T_Cells/processed_data/metadata.all_T_cells_merged.rds
+```
+
+Scripts: `code/run_unguided_gsfa_Tcells.R`
+
+```{bash, include=FALSE, eval=FALSE}
+sbatch ~/projects/GSFA_analysis/code/run_unguided_gsfa_Tcells.sbatch
+```
+
+Load packages
+```{r load-packages, message=FALSE, warning=FALSE}
+suppressPackageStartupMessages(library(data.table))
+# suppressPackageStartupMessages(library(Seurat))
+suppressPackageStartupMessages(library(ComplexHeatmap))
+suppressPackageStartupMessages(library(ggplot2))
+require(reshape2)
+require(dplyr)
+require(ComplexHeatmap)
+theme_set(theme_bw() + theme(plot.title = element_text(size = 14, hjust = 0.5),
+                             axis.title = element_text(size = 14),
+                             axis.text = element_text(size = 13),
+                             legend.title = element_text(size = 13),
+                             legend.text = element_text(size = 12),
+                             panel.grid.minor = element_blank())
+)
+suppressPackageStartupMessages(library(gridExtra))
+source("code/plotting_functions.R")
+```
+
+
+Set directories
+```{r dir}
+res_dir <- "/project2/xinhe/kevinluo/GSFA/unguided_GSFA/Stimulated_T_Cells/"
+dir.create(res_dir, recursive = TRUE, showWarnings = FALSE)
+```
+
+Load unguided GSFA result
+```{r}
+fit <- readRDS("/project2/xinhe/kevinluo/GSFA/unguided_GSFA/Stimulated_T_Cells/unguided_gsfa_output/All.gibbs_obj_k20.svd.light.rds")
+```
+
+Load the cell by perturbation matrix.
+```{r}
+data_folder <- "/project2/xinhe/kevinluo/GSFA/unguided_GSFA/Stimulated_T_Cells/"
+metadata <- readRDS(paste0(data_folder, "processed_data/metadata.all_T_cells_merged.rds"))
+sample_group <- endsWith(metadata$orig.ident, "S") * 1 # 0: unstimulated, 1: stimulated
+metadata <- metadata[which(sample_group == 1), ]
+
+# Perturbation info:
+G_mat <- metadata[, 4:24]
+G_mat <- as.matrix(G_mat)
+KO_names <- colnames(G_mat)
+negctrl_index <- which(KO_names == "NonTarget")
+```
+
+```{r, include=FALSE, eval=FALSE}
+# Associate factors to guides with marginal linear regression
+Z_pm <- fit$posterior_means$Z_pm
+if(!all.equal(rownames(G_mat), rownames(Z_pm))){
+  stop("Rownames of G_mat do not match with Z_pm!")
+}
+
+guide_names <- colnames(G_mat)
+factor_names <- colnames(Z_pm)
+
+pval.mat <- matrix(0, nrow=ncol(G_mat), ncol=ncol(Z_pm))
+rownames(pval.mat) <- guide_names
+colnames(pval.mat) <- factor_names
+
+beta.mat <- stat.mat <- pval.mat
+
+for (i in 1:nrow(pval.mat)) {
+  for (j in 1:ncol(pval.mat)){
+    df <- data.frame(factor = Z_pm[,j], guide = G_mat[,i])
+    lm.res <- lm(factor ~ guide, data=df)
+    beta.mat[i,j] <- summary(lm.res)$coefficients[2,1]
+    stat.mat[i,j] <- summary(lm.res)$coefficients[2,3]
+    pval.mat[i,j] <- summary(lm.res)$coefficients[2,4]
+  }
+}
+
+# aggregate DEGs from factors to guides.
+fdr.mat <- matrix(p.adjust(c(pval.mat),"BH"), nrow=nrow(pval.mat))
+rownames(fdr.mat) <- rownames(pval.mat)
+colnames(fdr.mat) <- colnames(pval.mat)
+```
+
+Use linear regression to test for the association between perturbations and factors
+```{r chisq-test}
+Z_pm <- fit$posterior_means$Z_pm
+if(!all.equal(rownames(G_mat), rownames(Z_pm))){
+  stop("Rownames of G_mat do not match with Z_pm!")
+}
+
+perturb_matrix <- G_mat
+factor_matrix <- Z_pm
+
+summary_df <- expand.grid(colnames(perturb_matrix), colnames(factor_matrix))
+colnames(summary_df) <- c("perturb", "factor")
+
+summary_df <- cbind(summary_df, beta = NA, statistic = NA, pval = NA)
+
+for(i in 1:nrow(summary_df)){
+  df <- data.frame(perturb = perturb_matrix[,summary_df$perturb[i]], 
+                   factor = factor_matrix[,summary_df$factor[i]])
+  lm.res <- lm(factor ~ perturb, data=df)
+  summary_df[i, ]$beta <- summary(lm.res)$coefficients["perturb",1]
+  summary_df[i, ]$statistic <- summary(lm.res)$coefficients["perturb",3]
+  summary_df[i, ]$pval <- summary(lm.res)$coefficients["perturb",4]
+}
+
+summary_df$fdr <- p.adjust(summary_df$pval, method = "BH")
+summary_df$bonferroni_adj <- p.adjust(summary_df$pval, method = "bonferroni")
+
+saveRDS(summary_df, file = file.path(res_dir, "Tcells_simultated_unguidedGSFA_guide_factor_lm_summary_df.rds"))
+
+stat_mat <- reshape2::dcast(summary_df %>% dplyr::select(perturb, factor, statistic), perturb ~ factor, value.var = "statistic") 
+rownames(stat_mat) <- stat_mat$perturb
+stat_mat$perturb <- NULL
+stat_mat <- as.matrix(stat_mat)
+
+beta_mat <- reshape2::dcast(summary_df %>% dplyr::select(perturb, factor, beta), perturb ~ factor, value.var = "beta")
+rownames(beta_mat) <- beta_mat$perturb
+beta_mat$perturb <- NULL
+beta_mat <- as.matrix(beta_mat)
+
+fdr_mat <- reshape2::dcast(summary_df %>% dplyr::select(perturb, factor, fdr), perturb ~ factor, value.var = "fdr")
+rownames(fdr_mat) <- fdr_mat$perturb
+fdr_mat$perturb <- NULL
+fdr_mat <- as.matrix(fdr_mat)
+
+bonferroni_mat <- reshape2::dcast(summary_df %>% dplyr::select(perturb, factor, bonferroni_adj), 
+                                  perturb ~ factor, value.var = "bonferroni_adj")
+rownames(bonferroni_mat) <- bonferroni_mat$perturb
+bonferroni_mat$perturb <- NULL
+bonferroni_mat <- as.matrix(bonferroni_mat)
+```
+
+```{r stat-fdr-dotplot, eval=TRUE, fig.width=9, fig.height=5.5}
+# pdf(file.path(res_dir, "stat-fdr-dotplot.pdf"), width = 9, height = 5.5)
+KO_names <- rownames(fdr_mat)
+dotplot_effectsize(t(beta_mat), t(fdr_mat),
+                   reorder_markers = c(KO_names[KO_names!="NonTarget"], "NonTarget"),
+                   color_lgd_title = "Estimated effect size",
+                   size_lgd_title = "FDR",
+                   max_score = 0.6,
+                   min_score = -0.6,
+                   by_score = 0.3) + coord_flip()
+# dev.off()
+```
+
+Plot perturbation ~ cluster associations (show Bonferroni adjusted p-values)
+```{r stat-bonferroni-dotplot, eval=TRUE, fig.width=9, fig.height=5.5}
+# pdf(file.path(res_dir, "stat-bonferroni-dotplot.pdf"), width = 9, height = 5.5)
+KO_names <- rownames(bonferroni_mat)
+dotplot_effectsize(t(beta_mat), t(bonferroni_mat),
+                   reorder_markers = c(KO_names[KO_names!="NonTarget"], "NonTarget"),
+                   color_lgd_title = "Estimated effect size",
+                   size_lgd_title = "Bonferroni\nadjusted p-value",
+                   max_score = 0.6,
+                   min_score = -0.6,
+                   by_score = 0.3) + coord_flip()
+# dev.off()
+```
+
+## Find DE genes for each factor and assign DE genes to associated perturbations
+
+First, find DE genes for each factor using F matrix (PIP>0.95).
+
+Then, for each perturbation, find the associated factors, and pull the DE genes for those factors.
+
+```{r get-de-genes}
+F_pm <- fit$posterior_means$F_pm
+# dim(F_pm)
+# feature.names <- data.frame(fread(file.path(data_dir, "LUHMES_GSM4219575_Run1_genes.tsv.gz"),
+#                                   header = FALSE), stringsAsFactors = FALSE)
+
+de.genes.factors <- vector("list", length = ncol(F_pm))
+names(de.genes.factors) <- colnames(F_pm)
+for( i in 1:length(de.genes.factors)){
+  de_genes <- rownames(F_pm[F_pm[,i] > 0.95,])
+  # de_genes <- feature.names$V2[match(de_genes, feature.names$V1)]
+  de.genes.factors[[i]] <- de_genes
+}
+```
+
+
+Number of DE genes for each perturbation (FDR < 0.05)
+```{r count-de-genes-fdr, fig.width=13, fig.height=5}
+perturb_names <- colnames(perturb_matrix)
+perturb_names <- c("NonTarget", perturb_names[perturb_names!="NonTarget"])
+
+de.genes.perturbs <- vector("list", length = length(perturb_names))
+names(de.genes.perturbs) <- perturb_names
+
+for(i in 1:length(de.genes.perturbs)){
+  perturb_name <- names(de.genes.perturbs)[i]
+  associated_factors <- colnames(fdr_mat)[which(fdr_mat[perturb_name, ] < 0.05)]
+  if(length(associated_factors) > 0){
+    de.genes.perturbs[[i]] <- unique(unlist(de.genes.factors[associated_factors]))
+  }
+}
+
+num.de.genes.perturbs <- sapply(de.genes.perturbs, length)
+
+unguided_GSFA_fdr0.05_genes <- de.genes.perturbs
+
+dge_plot_df <- data.frame(Perturbation = names(num.de.genes.perturbs), Num_DEGs = num.de.genes.perturbs)
+dge_plot_df$Perturbation <- factor(dge_plot_df$Perturbation, levels = names(num.de.genes.perturbs))
+
+# pdf(file.path(res_dir, "count-de-genes.pdf"), width = 13, height = 5)
+ggplot(data=dge_plot_df, aes(x = Perturbation, y = Num_DEGs+1)) +
+  geom_bar(position = "dodge", stat = "identity") +
+  geom_text(aes(label = Num_DEGs), position=position_dodge(width=0.9), vjust=-0.25) +
+  scale_y_log10() +
+  scale_fill_brewer(palette = "Set2") +
+  labs(x = "Target gene",
+       y = "Number of DEGs",
+       title = "Number of DEGs detected by unguided GSFA") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        legend.position = "bottom",
+        legend.text = element_text(size = 13))
+# dev.off()
+```
+
+
+Number of DE genes for each perturbation (Bonferroni adjusted p-value < 0.05)
+```{r count-de-genes-bonferroni, fig.width=13, fig.height=5}
+perturb_names <- colnames(perturb_matrix)
+perturb_names <- c("NonTarget", perturb_names[perturb_names!="NonTarget"])
+
+de.genes.perturbs <- vector("list", length = length(perturb_names))
+names(de.genes.perturbs) <- perturb_names
+
+for(i in 1:length(de.genes.perturbs)){
+  perturb_name <- names(de.genes.perturbs)[i]
+  associated_factors <- colnames(bonferroni_mat)[which(bonferroni_mat[perturb_name, ] < 0.05)]
+  if(length(associated_factors) > 0){
+    de.genes.perturbs[[i]] <- unique(unlist(de.genes.factors[associated_factors]))
+  }
+}
+
+num.de.genes.perturbs <- sapply(de.genes.perturbs, length)
+unguided_GSFA_bonferroni0.05_genes <- de.genes.perturbs
+
+dge_plot_df <- data.frame(Perturbation = names(num.de.genes.perturbs), Num_DEGs = num.de.genes.perturbs)
+dge_plot_df$Perturbation <- factor(dge_plot_df$Perturbation, levels = names(num.de.genes.perturbs))
+
+ggplot(data=dge_plot_df, aes(x = Perturbation, y = Num_DEGs+1)) +
+  geom_bar(position = "dodge", stat = "identity") +
+  geom_text(aes(label = Num_DEGs), position=position_dodge(width=0.9), vjust=-0.25) +
+  scale_y_log10() +
+  scale_fill_brewer(palette = "Set2") +
+  labs(x = "Target gene",
+       y = "Number of DEGs",
+       title = "Number of DEGs detected by unguided GSFA") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        legend.position = "bottom",
+        legend.text = element_text(size = 13))
+```
+
+## Compare single-gene DE p-value distributions between GSFA and unguided GSFA
+
+```{r}
+fdr_cutoff <- 0.05
+lfsr_cutoff <- 0.05
+```
+
+Load the output of GSFA `fit_gsfa_multivar()` run. 
+```{r}
+data_folder <- "/project2/xinhe/yifan/Factor_analysis/Stimulated_T_Cells/"
+fit <- readRDS(paste0(data_folder,
+                      "gsfa_output_detect_01/all_uncorrected_by_group.use_negctrl/All.gibbs_obj_k20.svd_negctrl.restart.light.rds"))
+gibbs_PM <- fit$posterior_means
+lfsr_mat1 <- fit$lfsr1[, -ncol(fit$lfsr1)]
+lfsr_mat0 <- fit$lfsr0[, -ncol(fit$lfsr0)]
+total_effect1 <- fit$total_effect1[, -ncol(fit$total_effect1)]
+total_effect0 <- fit$total_effect0[, -ncol(fit$total_effect0)]
+KO_names <- colnames(lfsr_mat1)
+```
+
+DEGs detected by GSFA
+```{r echo=FALSE}
+gsfa_sig_genes <- apply(lfsr_mat1, 2, function(x){names(x)[x < lfsr_cutoff]})
+
+sapply(gsfa_sig_genes, length)
+```
+
+Load MAST single-gene DE result
+```{r mast}
+guides <- KO_names[KO_names!="NonTarget"]
+
+mast_list <- list()
+for (m in guides){
+  fname <- paste0(data_folder, "processed_data/MAST/all_by_stim_negctrl/gRNA_", 
+                  m, ".dev_res_top6k.vs_negctrl.rds")
+  tmp_df <- readRDS(fname)
+  tmp_df$geneID <- rownames(tmp_df)
+  tmp_df <- tmp_df %>% dplyr::rename(FDR = fdr, PValue = pval)
+  mast_list[[m]] <- tmp_df
+}
+mast_signif_counts <- sapply(mast_list, function(x){filter(x, FDR < fdr_cutoff) %>% nrow()})
+```
+
+QQ-plots of MAST DE p-values for the GSFA genes vs unguided GSFA genes.
+```{r qqplots-gsfa-unguided-all, fig.height=16, fig.width=12, message=FALSE}
+qqplots <- list()
+for(i in 1:length(guides)){
+  guide <- guides[i]
+  mast_res <- mast_list[[guide]]
+  unguided_gsfa_de_genes <- unguided_GSFA_fdr0.05_genes[[guide]]
+  gsfa_de_genes <- gsfa_sig_genes[[guide]]
+  unguided_gsfa_de_genes <- intersect(unguided_gsfa_de_genes, rownames(mast_res))
+  gsfa_de_genes <- intersect(gsfa_de_genes, rownames(mast_res))
+  
+  if(length(unguided_gsfa_de_genes)>0 && length(gsfa_de_genes)>0){
+    # cat("plot", guide, "\n")
+    mast_res$unguided_gsfa_gene <- 0
+    mast_res[unguided_gsfa_de_genes, ]$unguided_gsfa_gene <- 1
+    mast_res$gsfa_gene <- 0
+    mast_res[gsfa_de_genes, ]$gsfa_gene <- 1
+    pvalue_list <- list('Unguided GSFA'=dplyr::filter(mast_res,unguided_gsfa_gene==1)$PValue,
+                        'GSFA'=dplyr::filter(mast_res,gsfa_gene==1)$PValue,
+                        'all genes'=mast_res$PValue)
+    qqplots[[guide]] <- qqplot.pvalue(pvalue_list, pointSize = 1, legendSize = 4) + 
+      ggtitle(guide) + theme(plot.title = element_text(hjust = 0.5)) +
+      scale_colour_discrete(name="Method")
+  }
+}
+
+grid.arrange(grobs = qqplots, nrow = 5, ncol = 3)
+```
+
+Pooling p-values from all perturbations
+```{r qqplots-gsfa-unguided-all-combined, dev=c('png', 'pdf'), fig.width=7.5, fig.height=6}
+combined_mast_res <- data.frame()
+for(i in 1:length(guides)){
+  guide <- guides[i]
+  mast_res <- mast_list[[guide]]
+  unguided_gsfa_de_genes <- unguided_GSFA_fdr0.05_genes[[guide]]
+  gsfa_de_genes <- gsfa_sig_genes[[guide]]
+  unguided_gsfa_de_genes <- intersect(unguided_gsfa_de_genes, rownames(mast_res))
+  gsfa_de_genes <- intersect(gsfa_de_genes, rownames(mast_res))
+  mast_res$unguided_gsfa_gene <- 0
+  if(length(unguided_gsfa_de_genes) >0){
+    mast_res[unguided_gsfa_de_genes, ]$unguided_gsfa_gene <- 1
+  }
+  mast_res$gsfa_gene <- 0
+  if(length(gsfa_de_genes) >0){
+    mast_res[gsfa_de_genes, ]$gsfa_gene <- 1
+  }
+  combined_mast_res <- rbind(combined_mast_res, mast_res)
+}
+
+pvalue_list <- list('Unguided GSFA'=dplyr::filter(combined_mast_res,unguided_gsfa_gene==1)$PValue,
+                    'GSFA'=dplyr::filter(combined_mast_res,gsfa_gene==1)$PValue,
+                    'all genes'=combined_mast_res$PValue)
+
+# pdf(file.path(res_dir, "qqplot_all_combined.pdf"))
+qqplot.pvalue(pvalue_list, pointSize = 1, legendSize = 4) + 
+      ggtitle("") + theme(plot.title = element_text(hjust = 0.5)) +
+      scale_colour_discrete(name="Method")
+
+# dev.off()
+```
+
+QQ-plots of MAST DE p-values for the GSFA only genes vs unguided GSFA only genes.
+```{r qqplots-gsfa-unguided-only, fig.height=16, fig.width=12, message=FALSE}
+qqplots <- list()
+for(i in 1:length(guides)){
+  guide <- guides[i]
+  mast_res <- mast_list[[guide]]
+  unguided_gsfa_de_genes <- unguided_GSFA_fdr0.05_genes[[guide]]
+  gsfa_de_genes <- gsfa_sig_genes[[guide]]
+  unguided_gsfa_de_genes <- intersect(unguided_gsfa_de_genes, rownames(mast_res))
+  gsfa_de_genes <- intersect(gsfa_de_genes, rownames(mast_res))
+  
+  unguided_gsfa_only_genes <- setdiff(unguided_gsfa_de_genes, gsfa_de_genes)
+  gsfa_only_genes <- setdiff(gsfa_de_genes, unguided_gsfa_de_genes)
+
+  if(length(unguided_gsfa_only_genes)>0 && length(gsfa_only_genes) >0){
+    # cat("plot", guide, "\n")
+    mast_res$unguided_gsfa_only_gene <- 0
+    mast_res[unguided_gsfa_only_genes, ]$unguided_gsfa_only_gene <- 1
+    mast_res$gsfa_only_gene <- 0
+    mast_res[gsfa_only_genes, ]$gsfa_only_gene <- 1
+    
+    pvalue_list <- list('Unguided GSFA only'=dplyr::filter(mast_res,unguided_gsfa_only_gene==1)$PValue,
+                        'GSFA only'=dplyr::filter(mast_res,gsfa_only_gene==1)$PValue,
+                        'all genes'=mast_res$PValue)
+    qqplots[[guide]] <- qqplot.pvalue(pvalue_list, pointSize = 1, legendSize = 4) + 
+      ggtitle(guide) + theme(plot.title = element_text(hjust = 0.5)) +
+      scale_colour_discrete(name="Method")
+  }
+}
+
+grid.arrange(grobs = qqplots, nrow = 5, ncol = 3)
+```
+
+
+Pooling p-values from all perturbations
+```{r qqplots-gsfa-unguided-only-combined, dev=c('png', 'pdf'), fig.width=7.5, fig.height=6}
+combined_mast_res <- data.frame()
+for(i in 1:length(guides)){
+  guide <- guides[i]
+  mast_res <- mast_list[[guide]]
+  unguided_gsfa_de_genes <- unguided_GSFA_fdr0.05_genes[[guide]]
+  gsfa_de_genes <- gsfa_sig_genes[[guide]]
+  unguided_gsfa_de_genes <- intersect(unguided_gsfa_de_genes, rownames(mast_res))
+  gsfa_de_genes <- intersect(gsfa_de_genes, rownames(mast_res))
+  mast_res$unguided_gsfa_only_gene <- 0
+  if(length(setdiff(unguided_gsfa_de_genes, gsfa_de_genes)) >0){
+    mast_res[setdiff(unguided_gsfa_de_genes, gsfa_de_genes), ]$unguided_gsfa_only_gene <- 1
+  }
+  mast_res$gsfa_only_gene <- 0
+  if(length(setdiff(gsfa_de_genes, unguided_gsfa_de_genes)) >0){
+    mast_res[setdiff(gsfa_de_genes, unguided_gsfa_de_genes), ]$gsfa_only_gene <- 1
+  }
+  combined_mast_res <- rbind(combined_mast_res, mast_res)
+}
+
+pvalue_list <- list('Unguided GSFA only'=dplyr::filter(combined_mast_res,unguided_gsfa_only_gene==1)$PValue,
+                    'GSFA only'=dplyr::filter(combined_mast_res,gsfa_only_gene==1)$PValue,
+                    'all genes'=combined_mast_res$PValue)
+
+# pdf(file.path(res_dir, "qqplot_only_combined.pdf"))
+qqplot.pvalue(pvalue_list, pointSize = 1, legendSize = 4) + 
+      ggtitle("") + theme(plot.title = element_text(hjust = 0.5)) +
+      scale_colour_discrete(name="Method") + 
+      coord_cartesian(ylim = c(0, 30)) 
+# dev.off()
+```
+
+
