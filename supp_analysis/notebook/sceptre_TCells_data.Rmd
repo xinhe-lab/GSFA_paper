@@ -1,7 +1,6 @@
 ---
 title: "Run SCEPTRE on CD8+ T Cell (stimulated and unstimulated) CROP-seq data"
 author: "Kaixuan Luo"
-date: "2022-05-25"
 output: workflowr::wflow_html
 editor_options:
   chunk_output_type: console
@@ -23,24 +22,6 @@ the rownames of which are the 6k genes used for GSFA.
 
 ## Analysis
 
-Scripts for running the analysis: `code/sceptre_analysis.R`, `code/sceptre_permute_analysis.R`
-```{bash, include=FALSE, eval=FALSE}
-# T cells stimulated data
-sbatch --mem=50G --cpus-per-task=10 ~/projects/GSFA_analysis/code/run_sceptre_Tcells_stimulated_data.sbatch
-
-# T cells unstimulated data
-sbatch --mem=50G --cpus-per-task=10 ~/projects/GSFA_analysis/code/run_sceptre_Tcells_unstimulated_data.sbatch
-```
-
-```{bash, include=FALSE, eval=FALSE}
-# Permutation analysis of T cells stimulated data
-for i in {1..10}
-do
-  sbatch --mem=50G --cpus-per-task=10 ~/projects/GSFA_analysis/code/run_sceptre_permuted_data.sbatch \
-  /project2/xinhe/kevinluo/GSFA/sceptre_analysis/TCells_cropseq_data_updated_covariates/simulated_data  i
-done
-```
-
 Load packages
 ```{r, message=FALSE, warning=FALSE}
 dyn.load('/software/geos-3.7.0-el7-x86_64/lib64/libgeos_c.so') # attach the geos lib for Seurat
@@ -49,7 +30,7 @@ library(cowplot)
 library(Matrix)
 library(sceptre)
 library(Seurat)
-source("code/plotting_functions.R")
+source("R/plotting_functions.R")
 ```
 
 ### Prepare input data for SCEPTRE

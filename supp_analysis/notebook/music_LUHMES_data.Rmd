@@ -38,7 +38,7 @@ theme_set(theme_bw() + theme(plot.title = element_text(size = 14, hjust = 0.5),
                              panel.grid.minor = element_blank())
 )
 
-source("code/plotting_functions.R")
+source("R/plotting_functions.R")
 ```
 
 functions

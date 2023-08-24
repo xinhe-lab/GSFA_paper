@@ -1,7 +1,6 @@
 ---
 title: "Unguided GSFA analysis on LUHMES CROP-seq data"
 author: "Kaixuan Luo"
-date: "2022-08-20"
 output:
   workflowr::wflow_html:
     toc: true
@@ -11,22 +10,6 @@ editor_options:
 
 ```{r knitr-opts, include=FALSE}
 knitr::opts_chunk$set(results = "hold", fig.align = "center", message=FALSE, warning=FALSE)
-```
-
-```{bash, include=FALSE, eval=FALSE}
-mkdir -p /project2/xinhe/kevinluo/GSFA/data
-
-cp /project2/xinhe/yifan/Factor_analysis/LUHMES/processed_data/deviance_residual.merged_top_6k.corrected_4.scaled.rds \
-  /project2/xinhe/kevinluo/GSFA/unguided_GSFA/LUHMES/processed_data/deviance_residual.merged_top_6k.corrected_4.scaled.rds
-
-cp /project2/xinhe/yifan/Factor_analysis/LUHMES/processed_data/merged_metadata.rds \
-  /project2/xinhe/kevinluo/GSFA/unguided_GSFA/LUHMES/processed_data/merged_metadata.rds
-```
-
-Scripts: `code/run_unguided_gsfa_LUHMES.R`
-
-```{bash, include=FALSE, eval=FALSE}
-sbatch ~/projects/GSFA_analysis/code/run_unguided_gsfa_LUHMES.sbatch
 ```
 
 Load packages
@@ -46,7 +29,7 @@ theme_set(theme_bw() + theme(plot.title = element_text(size = 14, hjust = 0.5),
                              panel.grid.minor = element_blank())
 )
 suppressPackageStartupMessages(library(gridExtra))
-source("code/plotting_functions.R")
+source("R/plotting_functions.R")
 ```
 
 Set directories

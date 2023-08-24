@@ -1,7 +1,6 @@
 ---
 title: "Two-step clustering analysis on LUHMES CROP-seq data"
 author: "Kaixuan Luo"
-date: "2022-08-10"
 output:
   workflowr::wflow_html:
     toc: true
@@ -12,23 +11,6 @@ editor_options:
 ```{r knitr-opts, include=FALSE}
 knitr::opts_chunk$set(results = "hold", fig.align = "center", message=FALSE, warning=FALSE)
 ```
-
-```{bash, include=FALSE, eval=FALSE}
-mkdir -p /project2/xinhe/kevinluo/GSFA/data
-
-cp /project2/xinhe/yifan/Factor_analysis/shared_data/LUHMES_cropseq_data_seurat.rds \
-  /project2/xinhe/kevinluo/GSFA/data
-
-cp /project2/xinhe/yifan/Factor_analysis/LUHMES/GSE142078_raw/GSM4219575_Run1_genes.tsv.gz \
-  /project2/xinhe/kevinluo/GSFA/data/LUHMES_GSM4219575_Run1_genes.tsv.gz
-```
-
-Scripts for running the analysis: `code/run_twostep_clustering_LUHMES_data.R`
-
-```{bash, include=FALSE, eval=FALSE}
-sbatch --mem=40G ~/projects/GSFA_analysis/code/run_twostep_clustering_LUHMES_data.sbatch
-```
-
 
 ## Load the data sets
 
@@ -57,7 +39,7 @@ theme_set(theme_bw() + theme(plot.title = element_text(size = 14, hjust = 0.5),
                              panel.grid.minor = element_blank())
 )
 suppressPackageStartupMessages(library(gridExtra))
-source("code/plotting_functions.R")
+source("R/plotting_functions.R")
 ```
 
 Set directories

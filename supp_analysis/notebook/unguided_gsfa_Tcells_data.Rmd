@@ -1,7 +1,6 @@
 ---
 title: "Unguided GSFA analysis on T cells CROP-seq data"
 author: "Kaixuan Luo"
-date: "2022-08-20"
 output:
   workflowr::wflow_html:
     toc: true
@@ -11,22 +10,6 @@ editor_options:
 
 ```{r knitr-opts, include=FALSE}
 knitr::opts_chunk$set(results = "hold", fig.align = "center", message=FALSE, warning=FALSE)
-```
-
-```{bash, include=FALSE, eval=FALSE}
-mkdir -p /project2/xinhe/kevinluo/GSFA/data
-
-cp /project2/xinhe/yifan/Factor_analysis/Stimulated_T_Cells/processed_data/deviance_residual.all_T_cells_merged_top_6k.batch_uncorrected.rds \
-  /project2/xinhe/kevinluo/GSFA/unguided_GSFA/Stimulated_T_Cells/processed_data/deviance_residual.all_T_cells_merged_top_6k.batch_uncorrected.rds
-
-cp /project2/xinhe/yifan/Factor_analysis/Stimulated_T_Cells/processed_data/metadata.all_T_cells_merged.rds \
-  /project2/xinhe/kevinluo/GSFA/unguided_GSFA/Stimulated_T_Cells/processed_data/metadata.all_T_cells_merged.rds
-```
-
-Scripts: `code/run_unguided_gsfa_Tcells.R`
-
-```{bash, include=FALSE, eval=FALSE}
-sbatch ~/projects/GSFA_analysis/code/run_unguided_gsfa_Tcells.sbatch
 ```
 
 Load packages
@@ -46,7 +29,7 @@ theme_set(theme_bw() + theme(plot.title = element_text(size = 14, hjust = 0.5),
                              panel.grid.minor = element_blank())
 )
 suppressPackageStartupMessages(library(gridExtra))
-source("code/plotting_functions.R")
+source("R/plotting_functions.R")
 ```
 
 

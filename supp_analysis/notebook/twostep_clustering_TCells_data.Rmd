@@ -1,7 +1,6 @@
 ---
 title: "Two-step clustering analysis on CD8+ T Cell (stimulated) CROP-seq data"
 author: "Kaixuan Luo"
-date: "2022-08-10"
 output:
   workflowr::wflow_html:
     toc: true
@@ -12,23 +11,6 @@ editor_options:
 ```{r knitr-opts, include=FALSE}
 knitr::opts_chunk$set(results = "hold", fig.align = "center", message=FALSE, warning=FALSE)
 ```
-
-```{bash, include=FALSE, eval=FALSE}
-mkdir -p /project2/xinhe/kevinluo/GSFA/data
-
-cp /project2/xinhe/yifan/Factor_analysis/shared_data/TCells_cropseq_data_seurat.rds \
-  /project2/xinhe/kevinluo/GSFA/data
-
-cp /project2/xinhe/yifan/Factor_analysis/Stimulated_T_Cells/GSE119450_RAW/D1N/genes.tsv \
-  /project2/xinhe/kevinluo/GSFA/data/Stimulated_T_Cells_GSE119450_RAW_D1N_genes.tsv.gz
-```
-
-Scripts for running the analysis: `code/run_twostep_clustering_Tcells_stimulated_data.R`
-
-```{bash, include=FALSE, eval=FALSE}
-sbatch --mem=40G ~/projects/GSFA_analysis/code/run_twostep_clustering_Tcells_data.sbatch
-```
-
 
 ## Load the data sets
 
@@ -57,7 +39,7 @@ theme_set(theme_bw() + theme(plot.title = element_text(size = 14, hjust = 0.5),
 )
 
 library(gridExtra)
-source("code/plotting_functions.R")
+source("R/plotting_functions.R")
 ```
 
 Set directories
