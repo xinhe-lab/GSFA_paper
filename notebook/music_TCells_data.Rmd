@@ -1,0 +1,618 @@
+---
+title: "MUSIC analysis on CD8+ T Cell (stimulated and unstimulated) CROP-seq data"
+author: "Kaixuan Luo"
+date: "2022-07-14"
+output:
+  workflowr::wflow_html:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+```{r knitr-opts, include=FALSE}
+knitr::opts_chunk$set(results = "hold", fig.align = "center", message=FALSE, warning=FALSE)
+```
+
+MUSIC website: https://github.com/bm2-lab/MUSIC
+
+## About the data sets
+
+CROP-seq datasets: `/project2/xinhe/yifan/Factor_analysis/shared_data/`.
+The data are Seurat objects, with raw gene counts stored in `obj@assays$RNA@counts`, 
+and cell meta data stored in `obj@meta.data`.
+Normalized and scaled data used for GSFA are stored in `obj@assays$RNA@scale.data`, 
+the rownames of which are the 6k genes used for GSFA.
+
+Load packages
+```{r load-packages, message=FALSE, warning=FALSE}
+dyn.load('/software/geos-3.7.0-el7-x86_64/lib64/libgeos_c.so') # attach the geos lib for Seurat
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(Seurat))
+suppressPackageStartupMessages(library(MUSIC))
+suppressPackageStartupMessages(library(ComplexHeatmap))
+suppressPackageStartupMessages(library(ggplot2))
+theme_set(theme_bw() + theme(plot.title = element_text(size = 14, hjust = 0.5),
+                             axis.title = element_text(size = 14),
+                             axis.text = element_text(size = 13),
+                             legend.title = element_text(size = 13),
+                             legend.text = element_text(size = 12),
+                             panel.grid.minor = element_blank())
+)
+
+source("code/plotting_functions.R")
+```
+
+Functions
+```{r functions}
+## Adapted over MUSIC's Diff_topic_distri() function
+Empirical_topic_prob_diff <- function(model, perturb_information,
+                                      permNum = 10^4, seed = 1000){
+  require(reshape2)
+  require(dplyr)
+  require(ComplexHeatmap)
+  options(warn = -1)
+  prob_mat <- model@gamma
+  row.names(prob_mat) <- model@documents
+  topicNum <- ncol(prob_mat)
+  topicName <- paste0('Topic_', 1:topicNum)
+  colnames(prob_mat) <- topicName
+  ko_name <- unique(perturb_information)
+  prob_df <- data.frame(prob_mat, 
+                        samples = rownames(prob_mat),
+                        knockout = perturb_information)
+  
+  prob_df <- melt(prob_df, id = c('samples', 'knockout'), variable.name = "topic")
+  
+  summary_df <- prob_df %>%
+    group_by(knockout, topic) %>%
+    summarise(number = sum(value)) %>%
+    ungroup() %>%
+    group_by(knockout) %>%
+    mutate(cellNum = sum(number)) %>%
+    ungroup() %>%
+    mutate(ratio = number/cellNum)
+  
+  summary_df$ctrlNum <- rep(summary_df$cellNum[summary_df$knockout == "CTRL"],
+                            length(ko_name))
+  summary_df$ctrl_ratio <- rep(summary_df$ratio[summary_df$knockout == "CTRL"],
+                               length(ko_name))
+  summary_df <- summary_df %>% mutate(diff_index = ratio - ctrl_ratio)
+  
+  test_df <- data.frame(matrix(nrow = length(ko_name) * topicNum, ncol = 5))
+  colnames(test_df) <- c("knockout", "topic", "obs_t_stats", "obs_pval", "empirical_pval")
+  k <- 1
+  for(i in topicName){
+    prob_df.topic <- prob_df[prob_df$topic == i, ]
+    ctrl_topic <- prob_df.topic$value[prob_df.topic$knockout == "CTRL"]
+    ctrl_topic_z <- (ctrl_topic - mean(ctrl_topic)) / sqrt(var(ctrl_topic))
+    for(j in ko_name){
+      ko_topic <- prob_df.topic$value[prob_df.topic$knockout == j]
+      ko_topic_z <- (ko_topic - mean(ctrl_topic)) / sqrt(var(ctrl_topic))
+      test_df$knockout[k] <- j
+      test_df$topic[k] <- i
+      test <- t.test(ko_topic_z, ctrl_topic_z)
+      test_df$obs_t_stats[k] <- test$statistic
+      test_df$obs_pval[k] <- test$p.value
+      k <- k + 1
+    }
+  }
+  
+  ## Permutation on the perturbation conditions:
+  # permNum <- 10^4
+  print(paste0("Performing permutation for ", permNum, " rounds."))
+  perm_t_stats <- matrix(0, nrow = nrow(test_df), ncol = permNum)
+  set.seed(seed)
+  for (perm in 1:permNum){
+    perm_prob_df <- data.frame(prob_mat, 
+                               samples = rownames(prob_mat),
+                               knockout = perturb_information[sample(length(perturb_information))])
+    perm_prob_df <- melt(perm_prob_df, id = c('samples', 'knockout'), variable.name = "topic")
+    k <- 1
+    for(i in topicName){
+      perm_prob_df.topic <- perm_prob_df[perm_prob_df$topic == i, ]
+      ctrl_topic <- perm_prob_df.topic$value[perm_prob_df.topic$knockout == "CTRL"]
+      ctrl_topic_z <- (ctrl_topic - mean(ctrl_topic)) / sqrt(var(ctrl_topic))
+      for(j in ko_name){
+        ko_topic <- perm_prob_df.topic$value[perm_prob_df.topic$knockout == j]
+        ko_topic_z <- (ko_topic - mean(ctrl_topic)) / sqrt(var(ctrl_topic))
+        test <- t.test(ko_topic_z, ctrl_topic_z)
+        perm_t_stats[k, perm] <- test$statistic
+        k <- k + 1
+      }
+    }
+    if (perm %% 1000 == 0){
+      print(paste0(perm, " rounds finished."))
+    }
+  }
+  ## Compute two-sided empirical p value:
+  for (k in 1:nrow(test_df)){
+    test_df$empirical_pval[k] <-
+      2 * min(mean(perm_t_stats[k, ] <= test_df$obs_t_stats[k]),
+              mean(perm_t_stats[k, ] >= test_df$obs_t_stats[k]))
+  }
+  test_df <- test_df %>%
+    mutate(empirical_pval = ifelse(empirical_pval == 0, 1/permNum, empirical_pval)) %>%
+    mutate(empirical_pval = ifelse(empirical_pval > 1, 1, empirical_pval))
+  
+  summary_df <- inner_join(summary_df, test_df, by = c("knockout", "topic"))
+  summary_df <- summary_df %>%
+    mutate(polar_log10_pval = ifelse(obs_t_stats > 0, -log10(empirical_pval), log10(empirical_pval)))
+  return(summary_df)
+}
+
+```
+
+Set directories
+```{r set-dir}
+data_dir <- "/project2/xinhe/yifan/Factor_analysis/Stimulated_T_Cells/"
+dir.create("/project2/xinhe/kevinluo/GSFA/music_analysis/Stimulated_T_Cells", recursive = TRUE, showWarnings = FALSE)
+```
+
+Load the T Cells CROP-seq data
+```{r load-data}
+combined_obj <- readRDS('/project2/xinhe/yifan/Factor_analysis/shared_data/TCells_cropseq_data_seurat.rds')
+```
+
+Separate stimulated and unstimulated cells into two data sets, and run those separately.
+```{r cell-covariate-matrix}
+metadata <- combined_obj@meta.data
+metadata[1:5, ]
+
+table(metadata$orig.ident)
+
+stimulated_cells <- rownames(metadata)[which(endsWith(metadata$orig.ident, "S"))]
+cat(length(stimulated_cells), "stimulated cells. \n")
+unstimulated_cells <- rownames(metadata)[which(endsWith(metadata$orig.ident, "N"))]
+cat(length(unstimulated_cells), "unstimulated cells. \n")
+```
+
+## Run simulated data
+```{r}
+dir.create("/project2/xinhe/kevinluo/GSFA/music_analysis/Stimulated_T_Cells/stimulated", recursive = TRUE, showWarnings = FALSE)
+res_dir <- "/project2/xinhe/kevinluo/GSFA/music_analysis/Stimulated_T_Cells/stimulated"
+dir.create(file.path(res_dir,"/music_output"), recursive = TRUE, showWarnings = FALSE)
+```
+
+```{r, eval=FALSE}
+setwd(res_dir)
+```
+
+### 0. Load input data
+
+```{r load_input_data}
+feature.names <- data.frame(fread(paste0(data_dir, "GSE119450_RAW/D1N/genes.tsv"),
+                                  header = FALSE), stringsAsFactors = FALSE)
+
+expression_profile <- combined_obj@assays$RNA@counts[, stimulated_cells]
+rownames(expression_profile) <- feature.names$V2[match(rownames(expression_profile),
+                                                       feature.names$V1)]
+cat("Dimension of expression profile matrix: \n")
+dim(expression_profile)
+
+targets <- names(combined_obj@meta.data)[4:24]
+targets[targets == "NonTarget"] <- "CTRL"
+cat("Targets: \n")
+print(targets)
+
+perturb_information <- apply(combined_obj@meta.data[stimulated_cells, 4:24], 1,
+                             function(x){ targets[which(x > 0)] })
+```
+
+### 1. Data preprocessing
+
+```{r preprocess, eval=FALSE}
+crop_seq_list <- Input_preprocess(expression_profile, perturb_information)
+
+crop_seq_qc <- Cell_qc(crop_seq_list$expression_profile,
+                       crop_seq_list$perturb_information,
+                       species = "Hs", plot = F)
+saveRDS(crop_seq_qc, "music_output/music_crop_seq_qc.rds")
+
+crop_seq_imputation <- Data_imputation(crop_seq_qc$expression_profile,
+                                       crop_seq_qc$perturb_information,
+                                       cpu_num = 5)
+saveRDS(crop_seq_imputation, "music_output/music_imputation.merged.rds")
+
+crop_seq_filtered <- Cell_filtering(crop_seq_imputation$expression_profile,
+                                    crop_seq_imputation$perturb_information,
+                                    cpu_num = 5)
+saveRDS(crop_seq_filtered, "music_output/music_filtered.merged.rds")
+```
+
+### 2. Model building
+```{r topics_models, eval=FALSE}
+crop_seq_vargene <- Get_high_varGenes(crop_seq_filtered$expression_profile,
+                                      crop_seq_filtered$perturb_information, plot = T)
+saveRDS(crop_seq_vargene, "music_output/music_vargene.merged.rds")
+
+crop_seq_vargene <- readRDS("music_output/music_vargene.merged.rds")
+
+## Get_topics() can take up to a few hours to finish, 
+## depending on the size of data
+system.time(
+  topic_1 <- Get_topics(crop_seq_vargene$expression_profile,
+                        crop_seq_vargene$perturb_information,
+                        topic_number = 5))
+saveRDS(topic_1, "music_output/music_merged_5_topics.rds")
+
+system.time(
+  topic_2 <- Get_topics(crop_seq_vargene$expression_profile,
+                        crop_seq_vargene$perturb_information,
+                        topic_number = 10))
+saveRDS(topic_2, "music_output/music_merged_10_topics.rds")
+
+system.time(
+  topic_3 <- Get_topics(crop_seq_vargene$expression_profile,
+                        crop_seq_vargene$perturb_information,
+                        topic_number = 15))
+saveRDS(topic_3, "music_output/music_merged_15_topics.rds")
+
+system.time(
+  topic_4 <- Get_topics(crop_seq_vargene$expression_profile,
+                        crop_seq_vargene$perturb_information,
+                        topic_number = 20))
+saveRDS(topic_4, "music_output/music_merged_20_topics.rds")
+
+## try fewer numbers of topics
+system.time(
+  topic_5 <- Get_topics(crop_seq_vargene$expression_profile,
+                        crop_seq_vargene$perturb_information,
+                        topic_number = 4))
+saveRDS(topic_5, "music_output/music_merged_4_topics.rds")
+
+system.time(
+  topic_6 <- Get_topics(crop_seq_vargene$expression_profile,
+                        crop_seq_vargene$perturb_information,
+                        topic_number = 6))
+saveRDS(topic_6, "music_output/music_merged_6_topics.rds")
+```
+
+### 3. Pick the number of topics
+```{r select_num_topics, eval=FALSE}
+topic_1 <- readRDS("music_output/music_merged_4_topics.rds")
+topic_2 <- readRDS("music_output/music_merged_5_topics.rds")
+topic_3 <- readRDS("music_output/music_merged_6_topics.rds")
+topic_4 <- readRDS("music_output/music_merged_10_topics.rds")
+topic_5 <- readRDS("music_output/music_merged_15_topics.rds")
+topic_6 <- readRDS("music_output/music_merged_20_topics.rds")
+
+topic_model_list <- list()
+topic_model_list$models <- list()
+topic_model_list$perturb_information <- topic_1$perturb_information
+topic_model_list$models[[1]] <- topic_1$models[[1]]
+topic_model_list$models[[2]] <- topic_2$models[[1]]
+topic_model_list$models[[3]] <- topic_3$models[[1]]
+topic_model_list$models[[4]] <- topic_4$models[[1]]
+topic_model_list$models[[5]] <- topic_5$models[[1]]
+topic_model_list$models[[6]] <- topic_6$models[[1]]
+
+optimalModel <- Select_topic_number(topic_model_list$models,
+                                    plot = T,
+                                    plot_path = "music_output/select_topic_number_4to6to20.pdf")
+```
+
+## Summarize the results
+
+### Summarize the results under 20 topics to be comparable to GSFA
+
+Gene ontology annotations for top topics
+```{r GO_20topics, eval=FALSE}
+topic_res <- readRDS("music_output/music_merged_20_topics.rds")
+
+topic_func <- Topic_func_anno(topic_res$models[[1]], species = "Hs")
+saveRDS(topic_func, "music_output/topic_func_20_topics.rds")
+```
+
+```{r GO_20topics-2, eval=FALSE, fig.weight=14, fig.height=12}
+topic_func <- readRDS("music_output/topic_func_20_topics.rds")
+pdf("music_output/music_merged_20_topics_GO_annotations.pdf",
+    width = 14, height = 12)
+ggplot(topic_func$topic_annotation_result) +
+  geom_point(aes(x = Cluster, y = Description,
+                 size = Count, color = -log10(qvalue))) +
+  scale_color_gradientn(colors = c("blue", "red")) +
+  theme_bw() +
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+dev.off()
+```
+
+Perturbation effect prioritizing
+```{r Diff_topic_distri_20topics, eval=FALSE}
+# calculate topic distribution for each cell.
+distri_diff <- Diff_topic_distri(topic_res$models[[1]],
+                                 topic_res$perturb_information,
+                                 plot = T)
+# saveRDS(distri_diff, "music_output/distri_diff_20_topics.rds")
+
+distri_diff <- readRDS("music_output/distri_diff_20_topics.rds")
+t_D_diff_matrix <- dcast(distri_diff %>% dplyr::select(knockout, variable, t_D_diff),
+                         knockout ~ variable)
+rownames(t_D_diff_matrix) <- t_D_diff_matrix$knockout
+t_D_diff_matrix$knockout <- NULL
+```
+
+```{r t_D_diff_matrix_20topics, eval=FALSE, fig.width=12, fig.height=8}
+pdf("music_output/music_merged_20_topics_TPD_heatmap.pdf", width = 12, height = 8)
+Heatmap(t_D_diff_matrix,
+        name = "Topic probability difference (vs ctrl)",
+        cluster_rows = T, cluster_columns = T,
+        column_names_rot = 45,
+        heatmap_legend_param = list(title_gp = gpar(fontsize = 12, fontface = "bold")))
+dev.off()
+```
+
+Calculate the overall perturbation effect ranking list without "offTarget_Info".
+```{r Rank_overall_20topics}
+distri_diff <- readRDS(file.path(res_dir, "music_output/distri_diff_20_topics.rds"))
+
+rank_overall_result <- Rank_overall(distri_diff)
+print(rank_overall_result)
+# saveRDS(rank_overall_result, "music_output/rank_overall_result_20_topics.rds")
+```
+
+calculate the topic-specific ranking list.
+```{r Rank_specific_20topics}
+rank_topic_specific_result <- Rank_specific(distri_diff)
+head(rank_topic_specific_result, 10)
+# saveRDS(rank_topic_specific_result, "music_output/rank_topic_specific_result_20_topics.rds")
+```
+
+calculate the perturbation correlation.
+```{r Correlation_perturbation_20topics}
+perturb_cor <- Correlation_perturbation(distri_diff,
+                                        cutoff = 0.5, gene = "all", plot = T,
+                                        plot_path = file.path(res_dir, "music_output/correlation_network_20_topics.pdf"))
+
+head(perturb_cor, 10)
+# saveRDS(perturb_cor, "music_output/perturb_cor_20_topics.rds")
+```
+
+Adaptation to the code to generate calibrated empirical TPD scores
+```{r Empirical_topic_prob_diff_20topics, eval=FALSE}
+summary_df <- Empirical_topic_prob_diff(topic_res$models[[1]],
+                                        topic_res$perturb_information)
+saveRDS(summary_df, "music_output/music_merged_20_topics_ttest_summary.rds")
+```
+
+
+```{r load_summary_df_20topics}
+summary_df <- readRDS(file.path(res_dir, "music_output/music_merged_20_topics_ttest_summary.rds"))
+
+summary_df$topic <- gsub("_", " ", summary_df$topic)
+summary_df$topic <- factor(summary_df$topic, levels = paste("Topic", 1:length(unique(summary_df$topic))))
+
+summary_df$fdr <- p.adjust(summary_df$empirical_pval, method = "BH")
+summary_df$bonferroni_adj <- p.adjust(summary_df$empirical_pval, method = "bonferroni")
+
+log10_pval_mat <- dcast(summary_df %>% dplyr::select(knockout, topic, polar_log10_pval),
+                        knockout ~ topic)
+rownames(log10_pval_mat) <- log10_pval_mat$knockout
+log10_pval_mat$knockout <- NULL
+
+effect_mat <- dcast(summary_df %>% dplyr::select(knockout, topic, obs_t_stats), knockout ~ topic)
+rownames(effect_mat) <- effect_mat$knockout
+effect_mat$knockout <- NULL
+
+fdr_mat <- dcast(summary_df %>% dplyr::select(knockout, topic, fdr), knockout ~ topic)
+rownames(fdr_mat) <- fdr_mat$knockout
+fdr_mat$knockout <- NULL
+
+bonferroni_mat <- dcast(summary_df %>% dplyr::select(knockout, topic, bonferroni_adj), knockout ~ topic)
+rownames(bonferroni_mat) <- bonferroni_mat$knockout
+bonferroni_mat$knockout <- NULL
+```
+
+```{r empirical_tstats_heatmap_20topics, fig.width=12, fig.height=8}
+# pdf("music_output/music_merged_20_topics_empirical_tstats_heatmap.pdf",
+#     width = 12, height = 8)
+ht <- Heatmap(log10_pval_mat,
+              name = "Polarized empirical t-test -log10(p-value)\n(KO vs ctrl cell topic probs)",
+              col = circlize::colorRamp2(breaks = c(-4, 0, 4), colors = c("blue", "grey90", "red")),
+              cluster_rows = T, cluster_columns = T,
+              column_names_rot = 45,
+              heatmap_legend_param = list(title_gp = gpar(fontsize = 12,
+                                                          fontface = "bold")))
+draw(ht)
+# dev.off()
+```
+
+```{r effect_fdr_dotplot_20topics, dev=c('png', 'pdf'), fig.width=10, fig.height=6}
+# pdf("music_output/music_merged_20_topics_empirical_tstats_fdr_dotplot.pdf",
+#     width = 12, height = 8)
+KO_names <- rownames(fdr_mat)
+dotplot_effectsize(t(effect_mat), t(fdr_mat),
+                   reorder_markers = c(KO_names[KO_names!="CTRL"], "CTRL"),
+                   color_lgd_title = "MUSIC T statistics",
+                   size_lgd_title = "FDR",
+                   max_score = 20,
+                   min_score = -20,
+                   by_score = 10) + 
+  coord_flip() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1))
+# dev.off()
+```
+
+```{r effect_bonferroni_dotplot_20topics, dev=c('png', 'pdf'), fig.width=10, fig.height=6}
+KO_names <- rownames(bonferroni_mat)
+dotplot_effectsize(t(effect_mat), t(bonferroni_mat),
+                   reorder_markers = c(KO_names[KO_names!="CTRL"], "CTRL"),
+                   color_lgd_title = "MUSIC T statistics",
+                   size_lgd_title = "Bonferroni\nadjusted p-value",
+                   max_score = 20,
+                   min_score = -20,
+                   by_score = 10) + 
+  coord_flip() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+```
+
+### Summarize the results using the optimal number of topics selected by the score
+```{r choose_optimal_num_topics, eval=FALSE}
+topic_1 <- readRDS("music_output/music_merged_4_topics.rds")
+topic_2 <- readRDS("music_output/music_merged_5_topics.rds")
+topic_3 <- readRDS("music_output/music_merged_6_topics.rds")
+
+topic_model_list <- list()
+topic_model_list$models <- list()
+topic_model_list$perturb_information <- topic_1$perturb_information
+topic_model_list$models[[1]] <- topic_1$models[[1]]
+topic_model_list$models[[2]] <- topic_2$models[[1]]
+topic_model_list$models[[3]] <- topic_3$models[[1]]
+
+optimalModel <- Select_topic_number(topic_model_list$models,
+                                    plot = T,
+                                    plot_path = "music_output/select_topic_number_4to6.pdf")
+optimalModel
+saveRDS(optimalModel, "music_output/optimalModel_4_topics.rds")
+```
+
+Gene ontology annotations for top topics
+```{r GO_4topics, eval=FALSE}
+topic_func <- Topic_func_anno(optimalModel, species = "Hs", plot_path = "music_output/topic_annotation_GO_4_topics.pdf")
+saveRDS(topic_func, "music_output/topic_func_4_topics.rds")
+```
+
+```{r GO_4topics-2, eval=FALSE, fig.weight=14, fig.height=12}
+topic_func <- readRDS("music_output/topic_func_4_topics.rds")
+pdf("music_output/music_merged_4_topics_GO_annotations.pdf",
+    width = 14, height = 12)
+ggplot(topic_func$topic_annotation_result) +
+  geom_point(aes(x = Cluster, y = Description,
+                 size = Count, color = -log10(qvalue))) +
+  scale_color_gradientn(colors = c("blue", "red")) +
+  theme_bw() +
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+dev.off()
+```
+
+Perturbation effect prioritizing
+```{r Diff_topic_distri_4topics, eval=FALSE}
+# calculate topic distribution for each cell.
+distri_diff <- Diff_topic_distri(optimalModel,
+                                 topic_model_list$perturb_information,
+                                 plot = T,
+                                 plot_path = "music_output/distribution_of_topic_4_topics.pdf")
+saveRDS(distri_diff, "music_output/distri_diff_4_topics.rds")
+
+t_D_diff_matrix <- dcast(distri_diff %>% dplyr::select(knockout, variable, t_D_diff),
+                         knockout ~ variable)
+rownames(t_D_diff_matrix) <- t_D_diff_matrix$knockout
+t_D_diff_matrix$knockout <- NULL
+
+```
+
+```{r t_D_diff_matrix_4topics, eval=FALSE, fig.width=12, fig.height=8}
+pdf("music_output/music_merged_4_topics_TPD_heatmap.pdf", width = 12, height = 8)
+Heatmap(t_D_diff_matrix,
+        name = "Topic probability difference (vs ctrl)",
+        cluster_rows = T, cluster_columns = T,
+        column_names_rot = 45,
+        heatmap_legend_param = list(title_gp = gpar(fontsize = 12, fontface = "bold")))
+dev.off()
+```
+
+The overall perturbation effect ranking list.
+```{r Rank_overall_4topics}
+distri_diff <- readRDS(file.path(res_dir, "music_output/distri_diff_4_topics.rds"))
+
+rank_overall_result <- Rank_overall(distri_diff)
+# print(rank_overall_result)
+# saveRDS(rank_overall_result, "music_output/rank_overall_4_topics_result.rds")
+```
+
+Topic-specific ranking list.
+```{r Rank_specific_4topics}
+rank_topic_specific_result <- Rank_specific(distri_diff)
+# print(rank_topic_specific_result)
+# saveRDS(rank_topic_specific_result, "music_output/rank_topic_specific_4_topics_result.rds")
+```
+
+Perturbation correlation.
+```{r Correlation_perturbation_4topics}
+perturb_cor <- Correlation_perturbation(distri_diff,
+                                        cutoff = 0.5, gene = "all", plot = T,
+                                        plot_path = file.path(res_dir, "music_output/correlation_network_4_topics.pdf"))
+
+# head(perturb_cor, 10)
+# saveRDS(perturb_cor, "music_output/perturb_cor_4_topics.rds")
+```
+
+Adaptation to the code to generate calibrated empirical TPD scores
+
+```{r Empirical_topic_prob_diff_4topics, eval=FALSE}
+summary_df <- Empirical_topic_prob_diff(optimalModel,
+                                        topic_model_list$perturb_information)
+saveRDS(summary_df, "music_output/music_merged_4_topics_ttest_summary.rds")
+```
+
+```{r load_summary_df_4topics}
+summary_df <- readRDS(file.path(res_dir, "music_output/music_merged_4_topics_ttest_summary.rds"))
+
+summary_df$topic <- gsub("_", " ", summary_df$topic)
+summary_df$topic <- factor(summary_df$topic, levels = paste("Topic", 1:length(unique(summary_df$topic))))
+
+summary_df$fdr <- p.adjust(summary_df$empirical_pval, method = "BH")
+summary_df$bonferroni_adj <- p.adjust(summary_df$empirical_pval, method = "bonferroni")
+
+log10_pval_mat <- dcast(summary_df %>% dplyr::select(knockout, topic, polar_log10_pval),
+                        knockout ~ topic)
+rownames(log10_pval_mat) <- log10_pval_mat$knockout
+log10_pval_mat$knockout <- NULL
+
+effect_mat <- dcast(summary_df %>% dplyr::select(knockout, topic, obs_t_stats), knockout ~ topic)
+rownames(effect_mat) <- effect_mat$knockout
+effect_mat$knockout <- NULL
+
+fdr_mat <- dcast(summary_df %>% dplyr::select(knockout, topic, fdr), knockout ~ topic)
+rownames(fdr_mat) <- fdr_mat$knockout
+fdr_mat$knockout <- NULL
+
+bonferroni_mat <- dcast(summary_df %>% dplyr::select(knockout, topic, bonferroni_adj), knockout ~ topic)
+rownames(bonferroni_mat) <- bonferroni_mat$knockout
+bonferroni_mat$knockout <- NULL
+```
+
+```{r empirical_tstats_heatmap_4topics, eval=TRUE, fig.width=12, fig.height=8}
+# pdf("music_output/music_merged_4_topics_empirical_tstats_heatmap.pdf",
+#     width = 12, height = 8)
+ht <- Heatmap(log10_pval_mat,
+              name = "Polarized empirical t-test -log10(p-value)\n(KO vs ctrl cell topic probs)",
+              col = circlize::colorRamp2(breaks = c(-4, 0, 4), colors = c("blue", "grey90", "red")),
+              cluster_rows = T, cluster_columns = T,
+              column_names_rot = 45,
+              heatmap_legend_param = list(title_gp = gpar(fontsize = 12,
+                                                          fontface = "bold")))
+draw(ht)
+# dev.off()
+```
+
+```{r effect_fdr_dotplot_4topics, dev=c('png', 'pdf'),  fig.width=4, fig.height=5.5}
+# pdf("music_output/music_merged_4_topics_empirical_tstats_fdr_dotplot.pdf",
+#     width = 12, height = 8)
+KO_names <- rownames(fdr_mat)
+dotplot_effectsize(t(effect_mat), t(fdr_mat),
+                   reorder_markers = c(KO_names[KO_names!="CTRL"], "CTRL"),
+                   color_lgd_title = "MUSIC T statistics",
+                   size_lgd_title = "FDR",
+                   max_score = 20,
+                   min_score = -20,
+                   by_score = 10) + 
+  coord_flip() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1))
+# dev.off()
+```
+
+
+```{r effect_bonferroni_dotplot_4topics, dev=c('png', 'pdf'),  fig.width=4, fig.height=5.5}
+KO_names <- rownames(bonferroni_mat)
+dotplot_effectsize(t(effect_mat), t(bonferroni_mat),
+                   reorder_markers = c(KO_names[KO_names!="CTRL"], "CTRL"),
+                   color_lgd_title = "MUSIC T statistics",
+                   size_lgd_title = "Bonferroni\nadjusted p-value",
+                   max_score = 20,
+                   min_score = -20,
+                   by_score = 10) + 
+  coord_flip() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1))
+```
