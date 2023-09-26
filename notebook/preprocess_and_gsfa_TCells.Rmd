@@ -60,7 +60,7 @@ The study targeted 20 genes, including 12 genes that were identified to regulate
 
 The original data came in four batches (donor 1 and 2 $\times$ unstimulated and stimulated), each in standard `cellranger` single-cell RNA-seq output format. Below is the code to merge all batches of cells together into one dataset.
 
-Meanwhile, each cell is also assigned its CRISPR perturbation target based the gRNA readout. Although each gene was targeted by 2 gRNAs, and 8 non-targeting gRNAs were designed as negative control, only gene-level perturbations are assigned to cells, resulting in 21 (20 genes + negative control) perturbation groups in total.  
+Meanwhile, each cell is also assigned its CRISPR perturbation target based on the gRNA readout. Although each gene was targeted by 2 gRNAs, and 8 non-targeting gRNAs were designed as negative control, only gene-level perturbations are assigned to cells, resulting in 21 (20 genes + negative control) perturbation groups in total.  
 (Each cell contains a unique gRNA, so the assignment is straight-forward.)
 
 ```{r load and merge}

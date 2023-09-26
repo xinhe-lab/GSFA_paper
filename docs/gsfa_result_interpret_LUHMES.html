@@ -14,7 +14,8 @@
 
 <title>Interpretation of GSFA Results on LUHMES CROP-seq Data</title>
 
-<script src="site_libs/jquery-3.5.1/jquery-3.5.1.min.js"></script>
+<script src="site_libs/header-attrs-2.20/header-attrs.js"></script>
+<script src="site_libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link href="site_libs/bootstrap-3.3.5/css/flatly.min.css" rel="stylesheet" />
 <script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
@@ -65,6 +66,7 @@ if (window.hljs) {
 
 
 
+
 <style type = "text/css">
 .main-container {
   max-width: 940px;
@@ -85,6 +87,9 @@ button.code-folding-btn:focus {
 }
 summary {
   display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
 }
 pre code {
   padding: 0;
@@ -142,11 +147,15 @@ $(document).ready(function () {
     href = "index.html";
   var menuAnchor = $('a[href="' + href + '"]');
 
-  // mark it active
-  menuAnchor.tab('show');
-
-  // if it's got a parent navbar menu mark it active as well
-  menuAnchor.closest('li.dropdown').addClass('active');
+  // mark the anchor link active (and if it's in a dropdown, also mark that active)
+  var dropdown = menuAnchor.closest('li.dropdown');
+  if (window.bootstrap) { // Bootstrap 4+
+    menuAnchor.addClass('active');
+    dropdown.find('> .dropdown-toggle').addClass('active');
+  } else { // Bootstrap 3
+    menuAnchor.parent().addClass('active');
+    dropdown.addClass('active');
+  }
 
   // Navbar adjustments
   var navHeight = $(".navbar").first().height() + 15;
@@ -175,8 +184,8 @@ $(document).ready(function () {
   border-radius: 4px;
 }
 
-.tabset-dropdown > .nav-tabs > li.active:before {
-  content: "";
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "\e259";
   font-family: 'Glyphicons Halflings';
   display: inline-block;
   padding: 10px;
@@ -184,16 +193,9 @@ $(document).ready(function () {
 }
 
 .tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
-  content: "&#xe258;";
-  border: none;
-}
-
-.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
-  content: "";
+  content: "\e258";
   font-family: 'Glyphicons Halflings';
-  display: inline-block;
-  padding: 10px;
-  border-right: 1px solid #ddd;
+  border: none;
 }
 
 .tabset-dropdown > .nav-tabs > li.active {
@@ -310,7 +312,7 @@ div.tocify {
 <div class="navbar navbar-default  navbar-fixed-top" role="navigation">
   <div class="container">
     <div class="navbar-header">
-      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-target="#navbar" data-bs-target="#navbar">
         <span class="icon-bar"></span>
         <span class="icon-bar"></span>
         <span class="icon-bar"></span>
@@ -334,20 +336,31 @@ div.tocify {
 
 
 
-<h1 class="title toc-ignore">Interpretation of GSFA Results on LUHMES CROP-seq Data</h1>
-<h3 class="subtitle">-- for manuscript</h3>
-<h4 class="author">Yifan Zhou (<a href="mailto:zhouyf@uchicago.edu">zhouyf@uchicago.edu</a>)</h4>
+<h1 class="title toc-ignore">Interpretation of GSFA Results on LUHMES
+CROP-seq Data</h1>
+<h3 class="subtitle">– for manuscript</h3>
+<h4 class="author">Yifan Zhou (<a href="mailto:zhouyf@uchicago.edu"
+class="email">zhouyf@uchicago.edu</a>)</h4>
 
 </div>
 
 
-<div id="introduction" class="section level1">
+<div id="introduction" class="section level1" number="1">
 <h1><span class="header-section-number">1</span> Introduction</h1>
-<p>This tutorial demonstrates how to visualize and interpret the results from a GSFA run.</p>
-<p>We have described how to run GSFA on LUHMES CROP-seq data from Lalli et al. <a href="https://gradonion.github.io/GSFA_paper/preprocess_and_gsfa_LUHMES.html">here</a>.</p>
-<p>To recapitulate, the processed dataset consists of 8708 neural progenitor cells that belong to one of the 15 perturbation conditions (CRISPR knock-down of 14 neurodevelopmental genes, and negative control). Top 6000 genes ranked by deviance statistics were kept. And GSFA was performed on the data with 20 factors specified.</p>
-<div id="load-necessary-packages-and-data" class="section level2">
-<h2><span class="header-section-number">1.1</span> Load necessary packages and data</h2>
+<p>This tutorial demonstrates how to visualize and interpret the results
+from a GSFA run.</p>
+<p>We have described how to run GSFA on LUHMES CROP-seq data from Lalli
+et al. <a
+href="https://gradonion.github.io/GSFA_paper/preprocess_and_gsfa_LUHMES.html">here</a>.</p>
+<p>To recapitulate, the processed dataset consists of 8708 neural
+progenitor cells that belong to one of the 15 perturbation conditions
+(CRISPR knock-down of 14 neurodevelopmental genes, and negative
+control). Top 6000 genes ranked by deviance statistics were kept. And
+GSFA was performed on the data with 20 factors specified.</p>
+<div id="load-necessary-packages-and-data" class="section level2"
+number="1.1">
+<h2><span class="header-section-number">1.1</span> Load necessary
+packages and data</h2>
 <pre class="r"><code>library(data.table)
 library(Matrix)
 library(tidyverse)
@@ -366,51 +379,69 @@ library(WebGestaltR)
 
 source(&quot;../R/plotting_functions.R&quot;)
 data_folder &lt;- &quot;../data/LUHMES/&quot;</code></pre>
-<p>The first thing we need is the output of GSFA <code>fit_gsfa_multivar()</code> run. The lighter version containing just the posterior mean estimates and LFSR of perturbation-gene effects is enough. (See <code>R/run_gsfa_LUHMES.R</code> for more GSFA run details.)</p>
+<p>The first thing we need is the output of GSFA
+<code>fit_gsfa_multivar()</code> run. The lighter version containing
+just the posterior mean estimates and LFSR of perturbation-gene effects
+is enough. (See <code>R/run_gsfa_LUHMES.R</code> for more GSFA run
+details.)</p>
 <pre class="r"><code>fit &lt;- readRDS(paste0(data_folder, &quot;gsfa_fit.light.rds&quot;))
 gibbs_PM &lt;- fit$posterior_means
 lfsr_mat &lt;- fit$lfsr[, -ncol(fit$lfsr)]
 KO_names &lt;- colnames(lfsr_mat)</code></pre>
-<p>We also need the cell by perturbation matrix which was used as input <span class="math inline">\(G\)</span> for GSFA.</p>
+<p>We also need the cell by perturbation matrix which was used as input
+<span class="math inline">\(G\)</span> for GSFA.</p>
 <pre class="r"><code>G_mat &lt;- readRDS(paste0(data_folder, &quot;perturbation_matrix.rds&quot;))</code></pre>
-<p>Finally, we load the mapping from gene name to ENSEMBL ID for all 6k genes used in GSFA, as well as selected neuronal marker genes. This is specific to this study and analysis.</p>
+<p>Finally, we load the mapping from gene name to ENSEMBL ID for all 6k
+genes used in GSFA, as well as selected neuronal marker genes. This is
+specific to this study and analysis.</p>
 <pre class="r"><code>genes_df &lt;- readRDS(paste0(data_folder, &quot;top6k_genes.rds&quot;))
 interest_df &lt;- readRDS(paste0(data_folder, &quot;selected_neuronal_markers.rds&quot;))</code></pre>
 </div>
 </div>
-<div id="factor-perturbation-association" class="section level1">
-<h1><span class="header-section-number">2</span> Factor ~ Perturbation Association</h1>
-<div id="perturbation-effects-on-factors" class="section level2">
-<h2><span class="header-section-number">2.1</span> Perturbation effects on factors</h2>
-<p>Fisrt of all, we look at the estimated effects of gene perturbations on factors inferred by GSFA.</p>
-<p>We found that targeting of 7 genes, ADNP, ARID1B, ASH1L, CHD2, DYRK1A, PTEN, and SETD5, has significant effects (PIP &gt; 0.95) on at least 1 of the 20 inferred factors.</p>
-<p>All targets and factors (Figure S6A):</p>
+<div id="factor-perturbation-association" class="section level1"
+number="2">
+<h1><span class="header-section-number">2</span> Factor ~ Perturbation
+Association</h1>
+<div id="perturbation-effects-on-factors" class="section level2"
+number="2.1">
+<h2><span class="header-section-number">2.1</span> Perturbation effects
+on factors</h2>
+<p>Fisrt of all, we look at the estimated effects of gene perturbations
+on factors inferred by GSFA.</p>
+<p>We found that targeting of 7 genes, ADNP, ARID1B, ASH1L, CHD2,
+DYRK1A, PTEN, and SETD5, has significant effects (PIP &gt; 0.95) on at
+least 1 of the 20 inferred factors.</p>
+<p>All targets and factors:</p>
 <pre class="r"><code>dotplot_beta_PIP(t(gibbs_PM$Gamma_pm), t(gibbs_PM$beta_pm),
                  marker_names = KO_names,
                  reorder_markers = c(KO_names[KO_names!=&quot;Nontargeting&quot;], &quot;Nontargeting&quot;),
                  inverse_factors = F) +
   coord_flip()</code></pre>
-<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/Fig_S6A-1.png" width="864" style="display: block; margin: auto;" /></p>
+<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/unnamed-chunk-5-1.png" width="864" style="display: block; margin: auto;" /></p>
 <pre class="r"><code>## Similar visualization using GSFA built-in functions:
 GSFA::dotplot_beta_PIP(fit,
                        target_names = KO_names,
                        reorder_targets = c(KO_names[KO_names!=&quot;Nontargeting&quot;], &quot;Nontargeting&quot;))</code></pre>
-<p>Here is a closer look at the estimated effects of selected perturbations on selected factors (Figure 5A):</p>
+<p>Here is a closer look at the estimated effects of selected
+perturbations on selected factors:</p>
 <pre class="r"><code>targets &lt;- c(&quot;ADNP&quot;, &quot;ARID1B&quot;, &quot;ASH1L&quot;, &quot;CHD2&quot;, &quot;DYRK1A&quot;, &quot;PTEN&quot;, &quot;SETD5&quot;)
 complexplot_perturbation_factor(gibbs_PM$Gamma_pm[-nrow(gibbs_PM$Gamma_pm), ],
                                 gibbs_PM$beta_pm[-nrow(gibbs_PM$beta_pm), ],
                                 marker_names = KO_names,
                                 reorder_markers = targets,
                                 reorder_factors = c(4, 9, 16))</code></pre>
-<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/Fig_5A-1.png" width="384" style="display: block; margin: auto;" /></p>
+<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/unnamed-chunk-7-1.png" width="384" style="display: block; margin: auto;" /></p>
 <pre class="r"><code>## Similar visualization using GSFA built-in functions:
 GSFA::dotplot_beta_PIP(fit,
                        target_names = KO_names,
                        reorder_targets = targets, reorder_factors = c(4, 9, 16))</code></pre>
 </div>
-<div id="factor-perturbation-association-p-values" class="section level2">
-<h2><span class="header-section-number">2.2</span> Factor-perturbation association p values</h2>
-<p>We can also assess the correlations between each pair of perturbation and inferred factor.<br />
+<div id="factor-perturbation-association-p-values"
+class="section level2" number="2.2">
+<h2><span class="header-section-number">2.2</span> Factor-perturbation
+association p values</h2>
+<p>We can also assess the correlations between each pair of perturbation
+and inferred factor.<br />
 The distribution of correlation p values show significant signals.</p>
 <pre class="r"><code>gibbs_res_tb &lt;- make_gibbs_res_tb(gibbs_PM, G_mat, compute_pve = F)
 heatmap_matrix &lt;- gibbs_res_tb %&gt;% select(starts_with(&quot;pval&quot;))
@@ -419,29 +450,39 @@ colnames(heatmap_matrix) &lt;- colnames(G_mat)
 
 summ_pvalues(unlist(heatmap_matrix),
              title_text = &quot;GSFA\n(15 Targets x 20 Factors)&quot;)</code></pre>
-<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/unnamed-chunk-7-1.png" width="960" style="display: block; margin: auto;" /></p>
+<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/unnamed-chunk-9-1.png" width="960" style="display: block; margin: auto;" /></p>
 </div>
 </div>
-<div id="factor-interpretation" class="section level1">
-<h1><span class="header-section-number">3</span> Factor Interpretation</h1>
-<div id="correlation-within-factors" class="section level2">
-<h2><span class="header-section-number">3.1</span> Correlation within factors</h2>
-<p>Since the GSFA model does not enforce orthogonality among factors, we first inspect the pairwise correlation within them to see if there is any redundancy. As we can see below, the inferred factors are mostly independent of each other.</p>
+<div id="factor-interpretation" class="section level1" number="3">
+<h1><span class="header-section-number">3</span> Factor
+Interpretation</h1>
+<div id="correlation-within-factors" class="section level2"
+number="3.1">
+<h2><span class="header-section-number">3.1</span> Correlation within
+factors</h2>
+<p>Since the GSFA model does not enforce orthogonality among factors, we
+first inspect the pairwise correlation within them to see if there is
+any redundancy. As we can see below, the inferred factors are mostly
+independent of each other.</p>
 <pre class="r"><code>plot_pairwise.corr_heatmap(input_mat_1 = gibbs_PM$Z_pm,
                            corr_type = &quot;pearson&quot;,
                            name_1 = &quot;Pairwise correlation within factors (Z)&quot;,
                            label_size = 10)</code></pre>
-<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/unnamed-chunk-8-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/unnamed-chunk-10-1.png" width="672" style="display: block; margin: auto;" /></p>
 <pre class="r"><code>plot_pairwise.corr_heatmap(input_mat_1 = (gibbs_PM$F_pm &gt; 0.95) * 1,
                            corr_type = &quot;jaccard&quot;,
                            name_1 = &quot;Pairwise correlation within \nbinarized gene loadings (F_pm &gt; 0.95)&quot;,
                            label_size = 10)</code></pre>
-<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/unnamed-chunk-9-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/unnamed-chunk-11-1.png" width="672" style="display: block; margin: auto;" /></p>
 </div>
-<div id="gene-loading-in-factors" class="section level2">
-<h2><span class="header-section-number">3.2</span> Gene loading in factors</h2>
-<p>To understand these latent factors, we inspect the loadings (weights) of several marker genes for neuron maturation and differentiation in them.</p>
-<div style="border: 1px solid #ddd; padding: 0px; overflow-y: scroll; height:400px; overflow-x: scroll; width:100%; ">
+<div id="gene-loading-in-factors" class="section level2" number="3.2">
+<h2><span class="header-section-number">3.2</span> Gene loading in
+factors</h2>
+<p>To understand these latent factors, we inspect the loadings (weights)
+of several marker genes for neuron maturation and differentiation in
+them.</p>
+<div
+style="border: 1px solid #ddd; padding: 0px; overflow-y: scroll; height:400px; overflow-x: scroll; width:100%; ">
 <table class="table" style="margin-left: auto; margin-right: auto;">
 <thead>
 <tr>
@@ -659,21 +700,28 @@ ENSG00000196591
 </tbody>
 </table>
 </div>
-<p>We visualize both the gene PIPs (dot size) and gene weights (dot color) in all factors (Figure S6B):</p>
+<p>We visualize both the gene PIPs (dot size) and gene weights (dot
+color) in all factors:</p>
 <pre class="r"><code>complexplot_gene_factor(genes_df, interest_df, gibbs_PM$F_pm, gibbs_PM$W_pm)</code></pre>
-<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/Fig_S6B-1.png" width="960" style="display: block; margin: auto;" /></p>
-<p>A closer look at some factors that are associated with perturbations (Figure 5C):</p>
+<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/unnamed-chunk-13-1.png" width="960" style="display: block; margin: auto;" /></p>
+<p>A closer look at some factors that are associated with
+perturbations:</p>
 <pre class="r"><code>complexplot_gene_factor(genes_df, interest_df, gibbs_PM$F_pm, gibbs_PM$W_pm,
                         reorder_factors = c(4, 9, 16))</code></pre>
-<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/Fig_5C-1.png" width="624" style="display: block; margin: auto;" /></p>
+<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/unnamed-chunk-14-1.png" width="624" style="display: block; margin: auto;" /></p>
 </div>
-<div id="go-enrichment-analysis-in-factors" class="section level2">
-<h2><span class="header-section-number">3.3</span> GO enrichment analysis in factors</h2>
-<p>To further characterize these latent factors, we perform GO (gene ontology) enrichment analysis of genes loaded on the factors using <code>WebGestalt</code>.</p>
-<p>Foreground genes: genes w/ non-zero loadings in each factor (gene PIP &gt; 0.95);<br />
+<div id="go-enrichment-analysis-in-factors" class="section level2"
+number="3.3">
+<h2><span class="header-section-number">3.3</span> GO enrichment
+analysis in factors</h2>
+<p>To further characterize these latent factors, we perform GO (gene
+ontology) enrichment analysis of genes loaded on the factors using
+<code>WebGestalt</code>.</p>
+<p>Foreground genes: genes w/ non-zero loadings in each factor (gene PIP
+&gt; 0.95);<br />
 Background genes: all 6000 genes used in GSFA;<br />
 Statistical test: hypergeometric test (over-representation test);<br />
-Gene sets: GO Slim &quot;Biological Process&quot; (non-redundant).</p>
+Gene sets: GO Slim “Biological Process” (non-redundant).</p>
 <pre class="r"><code>## The &quot;WebGestaltR&quot; tool needs Internet connection.
 enrich_db &lt;- &quot;geneontology_Biological_Process_noRedundant&quot;
 PIP_mat &lt;- gibbs_PM$F_pm
@@ -683,13 +731,14 @@ for (i in 1:ncol(PIP_mat)){
     WebGestaltR::WebGestaltR(enrichMethod = &quot;ORA&quot;,
                              organism = &quot;hsapiens&quot;,
                              enrichDatabase = enrich_db,
-                             interestGene = genes_df[PIP_mat[, i] &gt; 0.05, ]$ID,
+                             interestGene = genes_df[PIP_mat[, i] &gt; 0.95, ]$ID,
                              interestGeneType = &quot;ensembl_gene_id&quot;,
                              referenceGene = genes_df$ID,
                              referenceGeneType = &quot;ensembl_gene_id&quot;,
                              isOutput = F)
 }</code></pre>
-<p>Several GO “biological process” terms related to neuronal development are enriched in factors 4, 9, and 16 (Figure 5D):</p>
+<p>Several GO “biological process” terms related to neuronal development
+are enriched in factors 4, 9, and 16:</p>
 <pre class="r"><code>factor_indx &lt;- 4
 terms_of_interest &lt;- c(&quot;regulation of ion transmembrane transport&quot;,
                        &quot;regulation of trans-synaptic signaling&quot;,
@@ -700,7 +749,7 @@ barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
                          str_wrap_length = 35, pval_max = 8, FC_max = 6) +
   labs(title = paste0(&quot;Factor &quot;, factor_indx),
        x = &quot;Fold of enrichment&quot;)</code></pre>
-<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/Fig_5D_factor4-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/unnamed-chunk-17-1.png" width="672" style="display: block; margin: auto;" /></p>
 <pre class="r"><code>factor_indx &lt;- 9
 terms_of_interest &lt;- c(&quot;actin filament organization&quot;,
                        &quot;cell fate commitment&quot;,
@@ -711,7 +760,7 @@ barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
                          str_wrap_length = 35, pval_max = 8, FC_max = 6) +
   labs(title = paste0(&quot;Factor &quot;, factor_indx),
        x = &quot;Fold of enrichment&quot;)</code></pre>
-<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/Fig_5D_factor9-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/unnamed-chunk-18-1.png" width="672" style="display: block; margin: auto;" /></p>
 <pre class="r"><code>factor_indx &lt;- 16
 terms_of_interest &lt;- c(&quot;developmental growth involved in morphogenesis&quot;,
                        &quot;axon development&quot;)
@@ -720,18 +769,24 @@ barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
                          str_wrap_length = 35, pval_max = 8, FC_max = 6) +
   labs(title = paste0(&quot;Factor &quot;, factor_indx),
        x = &quot;Fold of enrichment&quot;)</code></pre>
-<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/Fig_5D_factor16-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/unnamed-chunk-19-1.png" width="672" style="display: block; margin: auto;" /></p>
 </div>
 </div>
-<div id="deg-interpretation" class="section level1">
+<div id="deg-interpretation" class="section level1" number="4">
 <h1><span class="header-section-number">4</span> DEG Interpretation</h1>
-<p>In GSFA, differential expression analysis can be performed based on the LFSR method. Here we evaluate the specific downstream genes affected by the perturbations detected by GSFA.</p>
-<p>We also performed several other differential expression methods for comparison, including scMAGeCK-LR, MAST, and DESeq.</p>
-<div id="number-of-degs-detected-by-different-methods" class="section level2">
-<h2><span class="header-section-number">4.1</span> Number of DEGs detected by different methods</h2>
+<p>In GSFA, differential expression analysis can be performed based on
+the LFSR method. Here we evaluate the specific downstream genes affected
+by the perturbations detected by GSFA.</p>
+<p>We also performed several other differential expression methods for
+comparison, including scMAGeCK-LR, MAST, and DESeq.</p>
+<div id="number-of-degs-detected-by-different-methods"
+class="section level2" number="4.1">
+<h2><span class="header-section-number">4.1</span> Number of DEGs
+detected by different methods</h2>
 <pre class="r"><code>fdr_cutoff &lt;- 0.05
 lfsr_cutoff &lt;- 0.05</code></pre>
-<div style="border: 1px solid #ddd; padding: 5px; overflow-x: scroll; width:100%; ">
+<div
+style="border: 1px solid #ddd; padding: 5px; overflow-x: scroll; width:100%; ">
 <table class="table" style="margin-left: auto; margin-right: auto;">
 <caption>
 Number of DEGs detected by GSFA under each perturbation:
@@ -873,7 +928,8 @@ scmageck_signif_counts &lt;- colSums(scmageck_res$fdr[, KO_names] &lt; fdr_cutof
                                 DESeq2 = deseq_signif_counts,
                                 MAST = mast_signif_counts)
 dge_comparison_df$Perturbation[dge_comparison_df$Perturbation == &quot;Nontargeting&quot;] &lt;- &quot;NegCtrl&quot;</code></pre>
-<p>Number of DEGs detected under each perturbation using 4 different methods (Figure 5E):</p>
+<p>Number of DEGs detected under each perturbation using 4 different
+methods:</p>
 <pre class="r"><code>dge_plot_df &lt;- reshape2::melt(dge_comparison_df, id.var = &quot;Perturbation&quot;,
                               variable.name = &quot;Method&quot;, value.name = &quot;Num_DEGs&quot;)
 dge_plot_df$Perturbation &lt;- factor(dge_plot_df$Perturbation,
@@ -889,24 +945,35 @@ ggplot(dge_plot_df, aes(x = Perturbation, y = Num_DEGs+1, fill = Method)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
         legend.position = &quot;bottom&quot;,
         legend.text = element_text(size = 13))</code></pre>
-<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/Fig_5E-1.png" width="1248" style="display: block; margin: auto;" /></p>
-<p>Compared with other differential expression analysis methods, GSFA detected the most DEGs for 5 out of 7 gene targets that have significant effects.</p>
+<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/unnamed-chunk-23-1.png" width="1248" style="display: block; margin: auto;" /></p>
+<p>Compared with other differential expression analysis methods, GSFA
+detected the most DEGs for 5 out of 7 gene targets that have significant
+effects.</p>
 </div>
-<div id="perturbation-effects-on-marker-genes" class="section level2">
-<h2><span class="header-section-number">4.2</span> Perturbation effects on marker genes</h2>
-<p>To better understand the functions of these 7 target genes, we examined their effects on marker genes for neuron maturation and differentiation.</p>
-<div id="gsfa" class="section level3">
+<div id="perturbation-effects-on-marker-genes" class="section level2"
+number="4.2">
+<h2><span class="header-section-number">4.2</span> Perturbation effects
+on marker genes</h2>
+<p>To better understand the functions of these 7 target genes, we
+examined their effects on marker genes for neuron maturation and
+differentiation.</p>
+<div id="gsfa" class="section level3" number="4.2.1">
 <h3><span class="header-section-number">4.2.1</span> GSFA</h3>
-<p>Here are the summarized effects of perturbations on marker genes estimated by GSFA (Figure 5G).</p>
-<p>As we can see, knockdown of ADNP, ASH1L, CHD2, and DYRK1A has mostly negative effects on mature neuronal markers, and positive effects on negative regulators of neuron projection, indicating delayed neuron maturation.</p>
-<p>Knockdown of PTEN and SETD5 has the opposite pattern, which indicates accelerated neuron maturation.</p>
+<p>Here are the summarized effects of perturbations on marker genes
+estimated by GSFA.</p>
+<p>As we can see, knockdown of ADNP, ASH1L, CHD2, and DYRK1A has mostly
+negative effects on mature neuronal markers, and positive effects on
+negative regulators of neuron projection, indicating delayed neuron
+maturation.</p>
+<p>Knockdown of PTEN and SETD5 has the opposite pattern, which indicates
+accelerated neuron maturation.</p>
 <pre class="r"><code>targets &lt;- c(&quot;ADNP&quot;, &quot;ARID1B&quot;, &quot;ASH1L&quot;, &quot;CHD2&quot;, &quot;DYRK1A&quot;, &quot;PTEN&quot;, &quot;SETD5&quot;)
 complexplot_gene_perturbation(genes_df, interest_df,
                               targets = targets,
                               lfsr_mat = lfsr_mat,
                               effect_mat = gibbs_PM$W_pm %*%
                                 t(gibbs_PM$beta_pm[-nrow(gibbs_PM$beta_pm), ]))</code></pre>
-<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/Fig_5G-1.png" width="624" style="display: block; margin: auto;" /></p>
+<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/unnamed-chunk-24-1.png" width="624" style="display: block; margin: auto;" /></p>
 <pre class="r"><code>## Similar visualization using GSFA built-in functions:
 GSFA::dotplot_total_effect(fit,
                            gene_indices = match(interest_df$gene_ID, rownames(lfsr_mat)),
@@ -914,9 +981,10 @@ GSFA::dotplot_total_effect(fit,
                            reorder_targets = targets, 
                            plot_max_score = 0.2)</code></pre>
 </div>
-<div id="scmageck" class="section level3">
+<div id="scmageck" class="section level3" number="4.2.2">
 <h3><span class="header-section-number">4.2.2</span> scMAGeCK</h3>
-<p>Here are scMAGeCK estimated effects of perturbations on marker genes (Figure 5H):</p>
+<p>Here are scMAGeCK estimated effects of perturbations on marker
+genes:</p>
 <pre class="r"><code>score_mat &lt;- scmageck_res$score
 fdr_mat &lt;- scmageck_res$fdr
 complexplot_gene_perturbation(genes_df, interest_df,
@@ -927,7 +995,7 @@ complexplot_gene_perturbation(genes_df, interest_df,
                               color_break = c(&quot;blue3&quot;, &quot;grey90&quot;, &quot;red3&quot;))</code></pre>
 <p><img src="gsfa_result_interpret_LUHMES_files/figure-html/Fig_5H-1.png" width="624" style="display: block; margin: auto;" /></p>
 </div>
-<div id="deseq2" class="section level3">
+<div id="deseq2" class="section level3" number="4.2.3">
 <h3><span class="header-section-number">4.2.3</span> DESeq2</h3>
 <pre class="r"><code>FC_mat &lt;- matrix(nrow = nrow(interest_df), ncol = length(targets))
 rownames(FC_mat) &lt;- interest_df$gene_name
@@ -938,7 +1006,8 @@ for (m in targets){
                                                       deseq_list[[m]]$geneID)]
   fdr_mat[, m] &lt;- deseq_list[[m]]$FDR[match(interest_df$gene_ID, deseq_list[[m]]$geneID)]
 }</code></pre>
-<p>Here are DESeq2 estimated effects of perturbations on marker genes (Figure S5C):</p>
+<p>Here are DESeq2 estimated effects of perturbations on marker
+genes:</p>
 <pre class="r"><code>complexplot_gene_perturbation(genes_df, interest_df,
                               targets = targets,
                               lfsr_mat = fdr_mat, lfsr_name = &quot;FDR&quot;,
@@ -947,7 +1016,7 @@ for (m in targets){
                               color_break = c(&quot;blue3&quot;, &quot;grey90&quot;, &quot;red3&quot;))</code></pre>
 <p><img src="gsfa_result_interpret_LUHMES_files/figure-html/Fig_S5C-1.png" width="624" style="display: block; margin: auto;" /></p>
 </div>
-<div id="mast" class="section level3">
+<div id="mast" class="section level3" number="4.2.4">
 <h3><span class="header-section-number">4.2.4</span> MAST</h3>
 <pre class="r"><code>FC_mat &lt;- matrix(nrow = nrow(interest_df), ncol = length(targets))
 rownames(FC_mat) &lt;- interest_df$gene_name
@@ -957,7 +1026,7 @@ for (m in targets){
   FC_mat[, m] &lt;- mast_list[[m]]$logFC[match(interest_df$gene_ID, mast_list[[m]]$geneID)]
   fdr_mat[, m] &lt;- mast_list[[m]]$FDR[match(interest_df$gene_ID, mast_list[[m]]$geneID)]
 }</code></pre>
-<p>MAST estimated effects of perturbations on marker genes (Figure S5D):</p>
+<p>MAST estimated effects of perturbations on marker genes:</p>
 <pre class="r"><code>complexplot_gene_perturbation(genes_df, interest_df,
                               targets = targets,
                               lfsr_mat = fdr_mat, lfsr_name = &quot;FDR&quot;,
@@ -967,13 +1036,16 @@ for (m in targets){
 <p><img src="gsfa_result_interpret_LUHMES_files/figure-html/Fig_S5D-1.png" width="624" style="display: block; margin: auto;" /></p>
 </div>
 </div>
-<div id="go-enrichment-in-degs" class="section level2">
-<h2><span class="header-section-number">4.3</span> GO enrichment in DEGs</h2>
-<p>We further examine these DEGs for enrichment of relevant biological processes through GO enrichment analysis.</p>
-<p>Foreground genes: Genes w/ GSFA LFSR &lt; 0.05 under each perturbation;<br />
+<div id="go-enrichment-in-degs" class="section level2" number="4.3">
+<h2><span class="header-section-number">4.3</span> GO enrichment in
+DEGs</h2>
+<p>We further examine these DEGs for enrichment of relevant biological
+processes through GO enrichment analysis.</p>
+<p>Foreground genes: Genes w/ GSFA LFSR &lt; 0.05 under each
+perturbation;<br />
 Background genes: all 6000 genes used in GSFA;<br />
 Statistical test: hypergeometric test (over-representation test);<br />
-Gene sets: Gene ontology &quot;Biological Process&quot; (non-redundant).</p>
+Gene sets: Gene ontology “Biological Process” (non-redundant).</p>
 <pre class="r"><code>## The &quot;WebGestaltR&quot; tool needs Internet connection.
 targets &lt;- names(lfsr_signif_num)[lfsr_signif_num &gt; 0]
 enrich_db &lt;- &quot;geneontology_Biological_Process_noRedundant&quot;
@@ -1017,8 +1089,11 @@ for (i in 1:ncol(enrich_table)){
   enrich_table[enrich_df$geneSet, i] &lt;- enrich_df$enrichmentRatio
 }
 rownames(enrich_table) &lt;- signif_term_df$description</code></pre>
-<p>Here are selected GO &quot;biological process&quot;&quot; terms and their folds of enrichment in DEGs detected by GSFA (Figure S5E):<br />
-(In the code below, we omitted the content in <code>terms_of_interest_df</code> as one can subset the <code>enrich_table</code> with any terms of their choice.)</p>
+<p>Here are selected GO “biological process” terms and their folds of
+enrichment in DEGs detected by GSFA:<br />
+(In the code below, we omitted the content in
+<code>terms_of_interest_df</code> as one can subset the
+<code>enrich_table</code> with any terms of their choice.)</p>
 <pre class="r"><code>interest_enrich_table &lt;- enrich_table[terms_of_interest_df$description,
                                       colnames(enrich_table) != &quot;DYRK1A&quot;]
 interest_enrich_table[is.na(interest_enrich_table)] &lt;- 0
@@ -1036,69 +1111,71 @@ map &lt;- Heatmap(abs(interest_enrich_table),
                column_names_side = &quot;top&quot;,
                width = unit(6, &quot;cm&quot;))
 draw(map, heatmap_legend_side = &quot;bottom&quot;)</code></pre>
-<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/Fig_S5E-1.png" width="768" style="display: block; margin: auto;" /></p>
+<p><img src="gsfa_result_interpret_LUHMES_files/figure-html/unnamed-chunk-33-1.png" width="768" style="display: block; margin: auto;" /></p>
 </div>
 </div>
-<div id="session-information" class="section level1">
-<h1><span class="header-section-number">5</span> Session Information</h1>
+<div id="session-information" class="section level1" number="5">
+<h1><span class="header-section-number">5</span> Session
+Information</h1>
 <pre class="r"><code>sessionInfo()</code></pre>
-<pre><code>R version 4.0.4 (2021-02-15)
+<pre><code>R version 4.2.0 (2022-04-22)
 Platform: x86_64-pc-linux-gnu (64-bit)
-Running under: Scientific Linux 7.4 (Nitrogen)
+Running under: CentOS Linux 7 (Core)
 
 Matrix products: default
 BLAS/LAPACK: /software/openblas-0.3.13-el7-x86_64/lib/libopenblas_haswellp-r0.3.13.so
 
 locale:
- [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C              
- [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8    
- [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8   
- [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                 
- [9] LC_ADDRESS=C               LC_TELEPHONE=C            
-[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
+ [1] LC_CTYPE=en_US.UTF-8 LC_NUMERIC=C         LC_TIME=C           
+ [4] LC_COLLATE=C         LC_MONETARY=C        LC_MESSAGES=C       
+ [7] LC_PAPER=C           LC_NAME=C            LC_ADDRESS=C        
+[10] LC_TELEPHONE=C       LC_MEASUREMENT=C     LC_IDENTIFICATION=C 
 
 attached base packages:
 [1] grid      stats     graphics  grDevices utils     datasets  methods  
 [8] base     
 
 other attached packages:
- [1] lattice_0.20-41      WebGestaltR_0.4.4    kableExtra_1.3.4    
- [4] ComplexHeatmap_2.6.2 gridExtra_2.3        forcats_0.5.1       
- [7] stringr_1.4.0        dplyr_1.0.4          purrr_0.3.4         
-[10] readr_1.4.0          tidyr_1.1.2          tibble_3.0.6        
-[13] ggplot2_3.3.3        tidyverse_1.3.0      Matrix_1.3-2        
-[16] data.table_1.14.0   
+ [1] lattice_0.20-45       WebGestaltR_0.4.4     kableExtra_1.3.4     
+ [4] ComplexHeatmap_2.12.0 gridExtra_2.3         forcats_1.0.0        
+ [7] stringr_1.5.0         dplyr_1.1.0           purrr_1.0.1          
+[10] readr_2.1.4           tidyr_1.3.0           tibble_3.1.8         
+[13] ggplot2_3.4.1         tidyverse_1.3.2       Matrix_1.5-3         
+[16] data.table_1.14.6    
 
 loaded via a namespace (and not attached):
- [1] matrixStats_0.58.0  fs_1.5.0            lubridate_1.7.9.2  
- [4] doParallel_1.0.16   webshot_0.5.2       RColorBrewer_1.1-2 
- [7] httr_1.4.2          doRNG_1.8.2         tools_4.0.4        
-[10] backports_1.2.1     bslib_0.2.4         utf8_1.1.4         
-[13] R6_2.5.0            DBI_1.1.1           BiocGenerics_0.36.1
-[16] colorspace_2.0-0    GetoptLong_1.0.5    withr_2.4.1        
-[19] tidyselect_1.1.0    compiler_4.0.4      cli_2.3.1          
-[22] rvest_0.3.6         Cairo_1.5-12.2      xml2_1.3.2         
-[25] labeling_0.4.2      sass_0.3.1          scales_1.1.1       
-[28] apcluster_1.4.8     systemfonts_1.0.1   digest_0.6.27      
-[31] rmarkdown_2.11      svglite_2.0.0       pkgconfig_2.0.3    
-[34] htmltools_0.5.1.1   highr_0.8           dbplyr_2.1.0       
-[37] rlang_0.4.10        GlobalOptions_0.1.2 readxl_1.3.1       
-[40] rstudioapi_0.13     farver_2.0.3        shape_1.4.5        
-[43] jquerylib_0.1.3     generics_0.1.0      jsonlite_1.7.2     
-[46] magrittr_2.0.1      Rcpp_1.0.6          munsell_0.5.0      
-[49] S4Vectors_0.28.1    fansi_0.4.2         lifecycle_1.0.0    
-[52] whisker_0.4         stringi_1.5.3       yaml_2.2.1         
-[55] plyr_1.8.6          parallel_4.0.4      crayon_1.4.1       
-[58] haven_2.3.1         pander_0.6.4        circlize_0.4.12    
-[61] hms_1.0.0           knitr_1.34          pillar_1.5.0       
-[64] igraph_1.2.6        rjson_0.2.20        rngtools_1.5       
-[67] reshape2_1.4.4      codetools_0.2-18    stats4_4.0.4       
-[70] reprex_1.0.0        glue_1.4.2          evaluate_0.14      
-[73] modelr_0.1.8        foreach_1.5.1       png_0.1-7          
-[76] vctrs_0.3.6         cellranger_1.1.0    gtable_0.3.0       
-[79] clue_0.3-58         assertthat_0.2.1    xfun_0.26          
-[82] broom_0.7.5         viridisLite_0.3.0   iterators_1.0.13   
-[85] IRanges_2.24.1      cluster_2.1.0       ellipsis_0.3.1     </code></pre>
+ [1] matrixStats_0.63.0  fs_1.6.1            lubridate_1.9.2    
+ [4] webshot_0.5.3       doParallel_1.0.17   RColorBrewer_1.1-3 
+ [7] httr_1.4.4          doRNG_1.8.6         tools_4.2.0        
+[10] backports_1.4.1     bslib_0.4.2         utf8_1.2.3         
+[13] R6_2.5.1            DBI_1.1.3           BiocGenerics_0.44.0
+[16] colorspace_2.1-0    GetoptLong_1.0.5    withr_2.5.0        
+[19] tidyselect_1.2.0    compiler_4.2.0      cli_3.6.0          
+[22] rvest_1.0.3         Cairo_1.6-0         xml2_1.3.3         
+[25] labeling_0.4.2      sass_0.4.5          scales_1.2.1       
+[28] apcluster_1.4.10    systemfonts_1.0.4   digest_0.6.31      
+[31] svglite_2.1.0       rmarkdown_2.20      pkgconfig_2.0.3    
+[34] htmltools_0.5.4     highr_0.10          dbplyr_2.3.0       
+[37] fastmap_1.1.0       rlang_1.0.6         GlobalOptions_0.1.2
+[40] readxl_1.4.2        rstudioapi_0.14     farver_2.1.1       
+[43] shape_1.4.6         jquerylib_0.1.4     generics_0.1.3     
+[46] jsonlite_1.8.4      googlesheets4_1.0.1 magrittr_2.0.3     
+[49] Rcpp_1.0.10         munsell_0.5.0       S4Vectors_0.36.1   
+[52] fansi_1.0.4         lifecycle_1.0.3     whisker_0.4        
+[55] stringi_1.7.12      yaml_2.3.7          plyr_1.8.7         
+[58] parallel_4.2.0      crayon_1.5.2        haven_2.5.1        
+[61] pander_0.6.5        circlize_0.4.15     hms_1.1.2          
+[64] knitr_1.42          pillar_1.8.1        igraph_1.4.0       
+[67] rjson_0.2.21        rngtools_1.5.2      reshape2_1.4.4     
+[70] codetools_0.2-18    stats4_4.2.0        reprex_2.0.2       
+[73] glue_1.6.2          evaluate_0.20       modelr_0.1.10      
+[76] png_0.1-8           vctrs_0.5.2         tzdb_0.3.0         
+[79] foreach_1.5.2       cellranger_1.1.0    gtable_0.3.1       
+[82] clue_0.3-61         assertthat_0.2.1    cachem_1.0.6       
+[85] xfun_0.37           broom_1.0.3         viridisLite_0.4.1  
+[88] googledrive_2.0.0   gargle_1.3.0        iterators_1.0.14   
+[91] IRanges_2.32.0      cluster_2.1.3       timechange_0.2.0   
+[94] ellipsis_0.3.2     </code></pre>
 </div>
 
 
