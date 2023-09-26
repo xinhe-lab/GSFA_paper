@@ -34,7 +34,7 @@ This page demonstrates how to visualize and interpret the results from a GSFA ru
 We have described in this [page](https://gradonion.github.io/GSFA_paper/preprocess_and_gsfa_TCells.html) how to run GSFA on CD8+ T cell CROP-seq data from Shifrut et al.
 
 To recapitulate, the processed dataset consists of 10677 unstimulated T cells and 14278 stimulated T cells.  
-They were subject to belong to one of the 21 perturbation conditions (CRISPR knock-out of 20 regulators of T cell proliferation or immune checkpoint genes, and negative control).  
+They belong to one of the 21 perturbation conditions (CRISPR knock-out of 20 regulators of T cell proliferation or immune checkpoint genes, and negative control).  
 Top 6000 genes ranked by deviance statistics were kept. A modified two-group GSFA was performed on the data with 20 factors specified, and perturbation effects estimated separately for cells with/without TCR stimulation.
 
 ## Load necessary packages and data
@@ -94,9 +94,9 @@ Fisrt of all, we look at the estimated effects of gene perturbations on factors 
 
 We found that targeting of 9 genes, ARID1A, CBLB, CD5, CDKN1B, DGKA, LCP2, RASA2, SOCS1, and TCEB2, has significant effects (PIP > 0.95) on at least 1 of the 20 inferred factors.
 
-Estimated effects of perturbations on factors (Figure S4A):
+Estimated effects of perturbations on factors:
 
-```{r Fig_S4A, fig.width=9, fig.height=6.5}
+```{r, fig.width=9, fig.height=6.5}
 dotplot_beta_PIP(t(gibbs_PM$Gamma1_pm), t(gibbs_PM$beta1_pm),
                  marker_names = KO_names,
                  reorder_markers = c(KO_names[KO_names!="NonTarget"], "NonTarget"),
@@ -104,9 +104,9 @@ dotplot_beta_PIP(t(gibbs_PM$Gamma1_pm), t(gibbs_PM$beta1_pm),
   coord_flip()
 ```
 
-Here is a closer look at the estimated effects of selected perturbations on selected factors (Figure 3A):
+Here is a closer look at the estimated effects of selected perturbations on selected factors:
 
-```{r Fig_3A, fig.width=4.5, fig.height=4}
+```{r, fig.width=4.5, fig.height=4}
 targets <- c("ARID1A", "LCP2", "CD5", "CBLB", "RASA2", 
              "DGKA", "TCEB2", "SOCS1", "CDKN1B")
 complexplot_perturbation_factor(gibbs_PM$Gamma1_pm[-nrow(gibbs_PM$Gamma1_pm), ],
@@ -135,7 +135,7 @@ summ_pvalues(unlist(heatmap_matrix),
 
 ## Perturbation effects on factors (unstimulated cells)
 
-In unstimulated cells, only three pairs of associations were detected at PIP > 0.95, which is unsurprising given the role of these targeted genes in regulating T cell responses (Figure S4B):
+In unstimulated cells, only three pairs of associations were detected at PIP > 0.95, which is unsurprising given the role of these targeted genes in regulating T cell responses:
 
 ```{r Fig_S4B, fig.width=9, fig.height=6.5}
 dotplot_beta_PIP(t(gibbs_PM$Gamma0_pm), t(gibbs_PM$beta0_pm),
@@ -176,15 +176,15 @@ knitr::kable(interest_df) %>%
     kable_styling() %>% scroll_box(width = '100%', height = '400px')
 ```
 
-We visualize both the gene PIPs (dot size) and gene weights (dot color) in all factors (Figure S4C):
+We visualize both the gene PIPs (dot size) and gene weights (dot color) in all factors:
 
-```{r Fig_S4C, fig.width=8.5, fig.height=4}
+```{r, fig.width=8.5, fig.height=4}
 complexplot_gene_factor(genes_df, interest_df, gibbs_PM$F_pm, gibbs_PM$W_pm)
 ```
 
-A closer look at some factors that are associated with perturbations (Figure 3C):
+A closer look at some factors that are associated with perturbations:
 
-```{r Fig_3C, fig.width=5.5, fig.height=4}
+```{r, fig.width=5.5, fig.height=4}
 complexplot_gene_factor(genes_df, interest_df, gibbs_PM$F_pm, gibbs_PM$W_pm,
                         reorder_factors = c(2, 4, 9, 12))
 ```
@@ -220,9 +220,9 @@ for (i in 1:ncol(PIP_mat)){
 enrich_res_by_factor <- readRDS(paste0(data_folder, "GO_enrich_in_GSFA_factors.rds"))
 ```
 
-Several GO “biological process” terms related to immune responses or cell cycle are enriched in factors 2, 4, 9, and 12 (Figure 3D):
+Several GO “biological process” terms related to immune responses or cell cycle are enriched in factors 2, 4, 9, and 12:
 
-```{r Fig_3D_factor2, fig.height=2.2, fig.width=7}
+```{r, fig.height=2.2, fig.width=7}
 factor_indx <- 2
 terms_of_interest <- c("kinetochore organization", "chromosome segregation",
                        "cell cycle G2/M phase transition", "cytokinesis")
@@ -232,7 +232,7 @@ barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
   labs(title = paste0("Factor ", factor_indx))
 ```
 
-```{r Fig_3D_factor9, fig.height=2.4, fig.width=7}
+```{r, fig.height=2.4, fig.width=7}
 factor_indx <- 9
 terms_of_interest <- c("microtubule cytoskeleton organization involved in mitosis",
                        "chromosome segregation", "cytokinesis", "cell cycle checkpoint")
@@ -242,7 +242,7 @@ barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
   labs(title = paste0("Factor ", factor_indx))
 ```
 
-```{r Fig_3D_factor4, fig.height=2.6, fig.width=7}
+```{r, fig.height=2.6, fig.width=7}
 factor_indx <- 4
 terms_of_interest <- c("response to chemokine", "cell killing", "leukocyte migration",
                        "response to interferon-gamma", "cytokine secretion")
@@ -252,7 +252,7 @@ barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
   labs(title = paste0("Factor ", factor_indx))
 ```
 
-```{r Fig_3D_factor12, fig.height=2.6, fig.width=7}
+```{r, fig.height=2.6, fig.width=7}
 factor_indx <- 12
 terms_of_interest <- c("leukocyte cell-cell adhesion", "extrinsic apoptotic signaling pathway",
                        "cell killing", "T cell activation", "NIK/NF-kappaB signaling")
@@ -313,10 +313,10 @@ dge_comparison_df <- data.frame(Perturbation = KO_names,
 dge_comparison_df$Perturbation[dge_comparison_df$Perturbation == "NonTarget"] <- "NegCtrl"
 ```
 
-Number of DEGs detected under each perturbation using 4 different methods (Figure 4A):  
+Number of DEGs detected under each perturbation using 4 different methods:  
 Compared with other differential expression analysis methods, GSFA detected the most DEGs for all 9 gene targets that have significant effects.
 
-```{r Fig_4A, fig.width=13, fig.height=5.5}
+```{r, fig.width=13, fig.height=5.5}
 dge_plot_df <- reshape2::melt(dge_comparison_df, id.var = "Perturbation",
                               variable.name = "Method", value.name = "Num_DEGs")
 dge_plot_df$Perturbation <- factor(dge_plot_df$Perturbation,
@@ -348,7 +348,7 @@ As we can see, knockout of SOCS1 or CDKN1B has positive effects on cell prolifer
 T cell activation and immune response:  
 Knockout of CD5, CBLB, RASA2 or TCEB2 has mostly positve effects on effector markers, indicating T cell activation; knockout of ARID1A has the opposite pattern.
 
-```{r Fig_4D, fig.width=5.5, fig.height=4.5}
+```{r, fig.width=5.5, fig.height=4.5}
 complexplot_gene_perturbation(genes_df, interest_df,
                               targets = targets,
                               lfsr_mat = lfsr_mat1,
@@ -358,9 +358,9 @@ complexplot_gene_perturbation(genes_df, interest_df,
 
 ### scMAGeCK
 
-Here are scMAGeCK estimated effects of perturbations on marker genes (Figure 4E):
+Here are scMAGeCK estimated effects of perturbations on marker genes:
 
-```{r Fig_4E, fig.width=5.5, fig.height=4.5}
+```{r, fig.width=5.5, fig.height=4.5}
 score_mat <- scmageck_res$score
 fdr_mat <- scmageck_res$fdr
 complexplot_gene_perturbation(genes_df, interest_df,
@@ -387,9 +387,9 @@ for (m in targets){
 }
 ```
 
-Here are DESeq2 estimated effects of perturbations on marker genes (Figure S4D):
+Here are DESeq2 estimated effects of perturbations on marker genes:
 
-```{r Fig_S4D, fig.width=5.5, fig.height=4.5}
+```{r, fig.width=5.5, fig.height=4.5}
 complexplot_gene_perturbation(genes_df, interest_df,
                               targets = targets,
                               lfsr_mat = fdr_mat, lfsr_name = "FDR",
@@ -541,10 +541,10 @@ terms_of_interest_df <- left_join(terms_of_interest_df, signif_term_df,
                                   by = "description")
 ```
 
-Here are selected GO "biological process"" terms and their folds of enrichment in DEGs detected by GSFA (Figure 4C).  
+Here are selected GO "biological process"" terms and their folds of enrichment in DEGs detected by GSFA.  
 (In the code below, we omitted the content in `terms_of_interest_df` as one can subset the `enrich_table` with any terms of their choice.)
 
-```{r Fig_4C, fig.height=5.5, fig.width=9}
+```{r, fig.height=5.5, fig.width=9}
 interest_enrich_table <- enrich_table[terms_of_interest_df$description, ]
 interest_enrich_table[is.na(interest_enrich_table)] <- 0
 

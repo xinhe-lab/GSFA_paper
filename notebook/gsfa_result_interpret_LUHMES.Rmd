@@ -89,7 +89,7 @@ Fisrt of all, we look at the estimated effects of gene perturbations on factors 
 We found that targeting of 7 genes, ADNP, ARID1B, ASH1L, CHD2, DYRK1A, PTEN, and SETD5, has significant effects (PIP > 0.95) on at least 1 of the 20 inferred factors.
 
 All targets and factors (Figure S6A):
-```{r Fig_S6A, fig.width=9, fig.height=5.5}
+```{r, fig.width=9, fig.height=5.5}
 dotplot_beta_PIP(t(gibbs_PM$Gamma_pm), t(gibbs_PM$beta_pm),
                  marker_names = KO_names,
                  reorder_markers = c(KO_names[KO_names!="Nontargeting"], "Nontargeting"),
@@ -104,9 +104,9 @@ GSFA::dotplot_beta_PIP(fit,
                        reorder_targets = c(KO_names[KO_names!="Nontargeting"], "Nontargeting"))
 ```
 
-Here is a closer look at the estimated effects of selected perturbations on selected factors (Figure 5A):
+Here is a closer look at the estimated effects of selected perturbations on selected factors:
 
-```{r Fig_5A, fig.width=4, fig.height=4}
+```{r, fig.width=4, fig.height=4}
 targets <- c("ADNP", "ARID1B", "ASH1L", "CHD2", "DYRK1A", "PTEN", "SETD5")
 complexplot_perturbation_factor(gibbs_PM$Gamma_pm[-nrow(gibbs_PM$Gamma_pm), ],
                                 gibbs_PM$beta_pm[-nrow(gibbs_PM$beta_pm), ],
@@ -168,15 +168,15 @@ knitr::kable(interest_df) %>%
     kable_styling() %>% scroll_box(width = '100%', height = '400px')
 ```
 
-We visualize both the gene PIPs (dot size) and gene weights (dot color) in all factors (Figure S6B):
+We visualize both the gene PIPs (dot size) and gene weights (dot color) in all factors:
 
-```{r Fig_S6B, fig.width=10, fig.height=5}
+```{r, fig.width=10, fig.height=5}
 complexplot_gene_factor(genes_df, interest_df, gibbs_PM$F_pm, gibbs_PM$W_pm)
 ```
 
-A closer look at some factors that are associated with perturbations (Figure 5C):
+A closer look at some factors that are associated with perturbations:
 
-```{r Fig_5C, fig.width=6.5, fig.height=5}
+```{r, fig.width=6.5, fig.height=5}
 complexplot_gene_factor(genes_df, interest_df, gibbs_PM$F_pm, gibbs_PM$W_pm,
                         reorder_factors = c(4, 9, 16))
 ```
@@ -212,9 +212,9 @@ for (i in 1:ncol(PIP_mat)){
 enrich_res_by_factor <- readRDS(paste0(data_folder, "GO_enrich_in_GSFA_factors.rds"))
 ```
 
-Several GO “biological process” terms related to neuronal development are enriched in factors 4, 9, and 16 (Figure 5D):
+Several GO “biological process” terms related to neuronal development are enriched in factors 4, 9, and 16:
 
-```{r Fig_5D_factor4, fig.height=2.4, fig.width=7}
+```{r, fig.height=2.4, fig.width=7}
 factor_indx <- 4
 terms_of_interest <- c("regulation of ion transmembrane transport",
                        "regulation of trans-synaptic signaling",
@@ -227,7 +227,7 @@ barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
        x = "Fold of enrichment")
 ```
 
-```{r Fig_5D_factor9, fig.height=2.4, fig.width=7}
+```{r, fig.height=2.4, fig.width=7}
 factor_indx <- 9
 terms_of_interest <- c("actin filament organization",
                        "cell fate commitment",
@@ -240,7 +240,7 @@ barplot_top_enrich_terms(enrich_res_by_factor[[factor_indx]],
        x = "Fold of enrichment")
 ```
 
-```{r Fig_5D_factor16, fig.height=1.8, fig.width=7}
+```{r, fig.height=1.8, fig.width=7}
 factor_indx <- 16
 terms_of_interest <- c("developmental growth involved in morphogenesis",
                        "axon development")
@@ -299,9 +299,9 @@ dge_comparison_df <- data.frame(Perturbation = names(lfsr_signif_num),
 dge_comparison_df$Perturbation[dge_comparison_df$Perturbation == "Nontargeting"] <- "NegCtrl"
 ```
 
-Number of DEGs detected under each perturbation using 4 different methods (Figure 5E):
+Number of DEGs detected under each perturbation using 4 different methods:
 
-```{r Fig_5E, fig.width=13, fig.height=5}
+```{r, fig.width=13, fig.height=5}
 dge_plot_df <- reshape2::melt(dge_comparison_df, id.var = "Perturbation",
                               variable.name = "Method", value.name = "Num_DEGs")
 dge_plot_df$Perturbation <- factor(dge_plot_df$Perturbation,
@@ -333,7 +333,7 @@ As we can see, knockdown of ADNP, ASH1L, CHD2, and DYRK1A has mostly negative ef
 
 Knockdown of PTEN and SETD5 has the opposite pattern, which indicates accelerated neuron maturation.
 
-```{r Fig_5G, fig.width=6.5, fig.height=5}
+```{r, fig.width=6.5, fig.height=5}
 targets <- c("ADNP", "ARID1B", "ASH1L", "CHD2", "DYRK1A", "PTEN", "SETD5")
 complexplot_gene_perturbation(genes_df, interest_df,
                               targets = targets,
@@ -353,7 +353,7 @@ GSFA::dotplot_total_effect(fit,
 
 ### scMAGeCK
 
-Here are scMAGeCK estimated effects of perturbations on marker genes (Figure 5H):
+Here are scMAGeCK estimated effects of perturbations on marker genes:
 
 ```{r Fig_5H, fig.width=6.5, fig.height=5}
 score_mat <- scmageck_res$score
@@ -380,7 +380,7 @@ for (m in targets){
 }
 ```
 
-Here are DESeq2 estimated effects of perturbations on marker genes (Figure S5C):
+Here are DESeq2 estimated effects of perturbations on marker genes:
 
 ```{r Fig_S5C, fig.width=6.5, fig.height=5}
 complexplot_gene_perturbation(genes_df, interest_df,
@@ -404,7 +404,7 @@ for (m in targets){
 }
 ```
 
-MAST estimated effects of perturbations on marker genes (Figure S5D):
+MAST estimated effects of perturbations on marker genes:
 
 ```{r Fig_S5D, fig.width=6.5, fig.height=5}
 complexplot_gene_perturbation(genes_df, interest_df,
@@ -514,10 +514,10 @@ terms_of_interest_df <- left_join(terms_of_interest_df, signif_term_df,
                                   by = "description")
 ```
 
-Here are selected GO "biological process" terms and their folds of enrichment in DEGs detected by GSFA (Figure S5E):  
+Here are selected GO "biological process" terms and their folds of enrichment in DEGs detected by GSFA:  
 (In the code below, we omitted the content in `terms_of_interest_df` as one can subset the `enrich_table` with any terms of their choice.)
 
-```{r Fig_S5E, fig.height=5.5, fig.width=8}
+```{r, fig.height=5.5, fig.width=8}
 interest_enrich_table <- enrich_table[terms_of_interest_df$description,
                                       colnames(enrich_table) != "DYRK1A"]
 interest_enrich_table[is.na(interest_enrich_table)] <- 0
