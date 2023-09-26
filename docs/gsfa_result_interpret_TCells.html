@@ -993,7 +993,11 @@ proliferation states.</p>
 <div id="gsfa" class="section level3" number="4.2.1">
 <h3><span class="header-section-number">4.2.1</span> GSFA</h3>
 <p>Here are the summarized effects of perturbations on marker genes
+<<<<<<< HEAD
 estimated by GSFA.</p>
+=======
+estimated by GSFA (Figure 4D).</p>
+>>>>>>> 04935ae6af7943cf9737a7c5374642526e41354a
 <p>Cell cycle:<br />
 As we can see, knockout of SOCS1 or CDKN1B has positive effects on cell
 proliferation markers, indicating increased cell proliferation.</p>
@@ -1057,7 +1061,12 @@ for (m in targets){
   fdr_mat[, m] &lt;- mast_list[[m]]$FDR[match(interest_df$gene_ID, 
                                            mast_list[[m]]$geneID)]
 }</code></pre>
+<<<<<<< HEAD
 <p>MAST estimated effects of perturbations on marker genes:</p>
+=======
+<p>MAST estimated effects of perturbations on marker genes (Figure
+S4E):</p>
+>>>>>>> 04935ae6af7943cf9737a7c5374642526e41354a
 <pre class="r"><code>complexplot_gene_perturbation(genes_df, interest_df,
                               targets = targets,
                               lfsr_mat = fdr_mat, lfsr_name = &quot;FDR&quot;,
@@ -1138,7 +1147,11 @@ map &lt;- Heatmap(interest_enrich_table,
                column_names_rot = 45,
                width = unit(7, &quot;cm&quot;))
 draw(map, heatmap_legend_side = &quot;right&quot;)</code></pre>
+<<<<<<< HEAD
 <p><img src="gsfa_result_interpret_TCells_files/figure-html/unnamed-chunk-32-1.png" width="864" style="display: block; margin: auto;" /></p>
+=======
+<p><img src="gsfa_result_interpret_TCells_files/figure-html/unnamed-chunk-31-1.png" width="864" style="display: block; margin: auto;" /></p>
+>>>>>>> 04935ae6af7943cf9737a7c5374642526e41354a
 </div>
 </div>
 <div id="session-information" class="section level1" number="5">

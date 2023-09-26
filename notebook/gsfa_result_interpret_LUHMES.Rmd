@@ -88,7 +88,11 @@ Fisrt of all, we look at the estimated effects of gene perturbations on factors 
 
 We found that targeting of 7 genes, ADNP, ARID1B, ASH1L, CHD2, DYRK1A, PTEN, and SETD5, has significant effects (PIP > 0.95) on at least 1 of the 20 inferred factors.
 
+<<<<<<< HEAD
 All targets and factors:
+=======
+All targets and factors (Figure S6A):
+>>>>>>> 04935ae6af7943cf9737a7c5374642526e41354a
 ```{r, fig.width=9, fig.height=5.5}
 dotplot_beta_PIP(t(gibbs_PM$Gamma_pm), t(gibbs_PM$beta_pm),
                  marker_names = KO_names,
