@@ -77,7 +77,7 @@ dotplot_beta_PIP <- function(beta_pip_matrix, beta_pm_matrix,
     beta_pip_df <- beta_pip_df[reorder_factors, ]
   }
   beta_pip_plot_df <- reshape2::melt(beta_pip_df, value.name = "PIP")
-  
+
   rownames(beta_pm_matrix) <- 1:nrow(beta_pm_matrix)
   colnames(beta_pm_matrix) <- marker_names
   beta_pm_matrix <- beta_pm_matrix[, reorder_markers]
@@ -139,20 +139,20 @@ dotplot_effectsize <- function(effect_matrix, lfsr_matrix,
       return("> 0.25")
     }
   }
-  
+
   lfsr_matrix <- lfsr_matrix[, reorder_markers]
   effect_matrix <- effect_matrix[, reorder_markers]
-  
+
   pip_df <- as.data.frame(lfsr_matrix)
   pip_df$gene <- rownames(lfsr_matrix)
   pip_plot_df <- reshape2::melt(pip_df, variable.name = "Perturbation",
                                 value.name = "LFSR")
-  
+
   effect_df <- as.data.frame(effect_matrix)
   effect_df$gene <- rownames(effect_matrix)
   effect_plot_df <- reshape2::melt(effect_df, variable.name = "Perturbation",
                                    value.name = "Effect_size")
-  
+
   combined_plot_df <- effect_plot_df %>%
     mutate(LFSR = pip_plot_df$LFSR,
            gene = factor(gene, levels = rownames(effect_matrix)),
@@ -178,7 +178,7 @@ dotplot_effectsize <- function(effect_matrix, lfsr_matrix,
   return(plot_out)
 }
 
-complexplot_perturbation_factor <- function(gamma_pm, beta_pm, 
+complexplot_perturbation_factor <- function(gamma_pm, beta_pm,
                                             marker_names,
                                             reorder_markers = marker_names,
                                             reorder_factors = NULL){
@@ -186,12 +186,12 @@ complexplot_perturbation_factor <- function(gamma_pm, beta_pm,
   colnames(gamma_pm) <- paste0("Factor ", 1:ncol(gamma_pm))
   rownames(beta_pm) <- marker_names
   colnames(beta_pm) <- paste0("Factor ", 1:ncol(beta_pm))
-  
+
   if (!is.null(reorder_factors)){
     pip_mat <- gamma_pm[reorder_markers, reorder_factors]
     effect_size_mat <- beta_pm[reorder_markers, reorder_factors]
   }
- 
+
   lgd_list <- list()
   col_fun <- circlize::colorRamp2(breaks = seq(-0.3, 0.3, 0.3),
                                   colors = c("purple3", "grey90", "darkorange1"))
@@ -200,11 +200,11 @@ complexplot_perturbation_factor <- function(gamma_pm, beta_pm,
                                      at = seq(-0.3, 0.3, 0.3),
                                      col_fun = col_fun,
                                      labels_gp = gpar(fontsize = 12))
-  
+
   pip_tic_values <- seq(0.25, 1, 0.25)
   pip_tic_labels <- c("0.25", "0.50", "0.75", "1.00")
-  
-  lgd_list[["pip"]] <- 
+
+  lgd_list[["pip"]] <-
     Legend(title = "PIP",
            title_gp = gpar(fontsize = 13, fontface = "bold"),
            labels = pip_tic_labels,
@@ -221,13 +221,13 @@ complexplot_perturbation_factor <- function(gamma_pm, beta_pm,
              function(x, y, w, h) grid.circle(x, y, r = (pip_tic_values[4] + 0.2) * unit(2, "mm"),
                                               gp = gpar(fill = "black"))
            ))
-  
+
   map1 <- Heatmap(effect_size_mat,
                   name = "Association Effect Size",
                   col = col_fun,
                   rect_gp = gpar(type = "none"),
                   cell_fun = function(j, i, x, y, width, height, fill) {
-                    grid.rect(x = x, y = y, width = width, height = height, 
+                    grid.rect(x = x, y = y, width = width, height = height,
                               gp = gpar(col = NA, fill = NA))
                     grid.circle(x = x, y = y,
                                 r = (pip_mat[i, j] + 0.2) * unit(2, "mm"),
@@ -256,14 +256,14 @@ complexplot_gene_factor <- function(genes_df, interest_df,
   colnames(F_pm) <- paste0("Factor ", 1:ncol(F_pm))
   rownames(W_pm) <- genes_df$Name
   colnames(W_pm) <- paste0("Factor ", 1:ncol(W_pm))
-  
+
   if (!is.null(reorder_factors)){
     F_pm <- F_pm[, reorder_factors]
     W_pm <- W_pm[, reorder_factors]
   }
   effect_size_mat <- W_pm[interest_df$gene_name, ]
   pip_mat <- F_pm[interest_df$gene_name, ]
-  
+
   lgd_list <- list()
   col_fun <- circlize::colorRamp2(breaks = seq(-0.6, 0.6, 0.3),
                                   colors = c("purple3", "purple2", "grey90", "darkorange", "darkorange1"))
@@ -272,11 +272,11 @@ complexplot_gene_factor <- function(genes_df, interest_df,
                                      at = seq(-0.6, 0.6, 0.3),
                                      col_fun = col_fun,
                                      labels_gp = gpar(fontsize = 12))
-  
+
   pip_tic_values <- seq(0.25, 1, 0.25)
   pip_tic_labels <- c("0.25", "0.50", "0.75", "1.00")
-  
-  lgd_list[["pip"]] <- 
+
+  lgd_list[["pip"]] <-
     Legend(title = "PIP",
            title_gp = gpar(fontsize = 13, fontface = "bold"),
            labels = pip_tic_labels,
@@ -293,7 +293,7 @@ complexplot_gene_factor <- function(genes_df, interest_df,
              function(x, y, w, h) grid.circle(x, y, r = (pip_tic_values[4] + 0.2) * unit(2, "mm"),
                                               gp = gpar(fill = "black"))
            ))
-  
+
   marker_colormap <- structure(RColorBrewer::brewer.pal(length(levels(interest_df$type)), "Set3"),
                                names = levels(interest_df$type))
   lgd_list[["Marker"]] <-  Legend(title = "Marker annotation",
@@ -313,13 +313,13 @@ complexplot_gene_factor <- function(genes_df, interest_df,
                                ),
                                show_annotation_name = F,
                                show_legend = F)
-  
+
   map1 <- Heatmap(effect_size_mat,
                   name = "Gene loading",
                   col = col_fun,
                   rect_gp = gpar(type = "none"),
                   cell_fun = function(j, i, x, y, width, height, fill) {
-                    grid.rect(x = x, y = y, width = width, height = height, 
+                    grid.rect(x = x, y = y, width = width, height = height,
                               gp = gpar(col = NA, fill = NA))
                     grid.circle(x = x, y = y,
                                 r = (pip_mat[i, j] + 0.2) * unit(2, "mm"),
@@ -366,27 +366,27 @@ complexplot_gene_perturbation <- function(genes_df, interest_df,
     targets <- names(num_signif_genes)[which(num_signif_genes > 0)]
   }
   selected_effect_mat <- effect_mat[interest_df$gene_name, targets]
-  
+
   selected_lfsr_mat <- lfsr_mat[interest_df$gene_name, targets]
-  binned_size_mat <- matrix(0.6, 
+  binned_size_mat <- matrix(0.6,
                             nrow = nrow(selected_lfsr_mat),
                             ncol = ncol(selected_lfsr_mat))
   rownames(binned_size_mat) <- rownames(selected_lfsr_mat)
   colnames(binned_size_mat) <- colnames(selected_lfsr_mat)
   binned_size_mat[selected_lfsr_mat <= 0.05] <- 1
   binned_size_mat[selected_lfsr_mat > 0.25] <- 0.2
-  
+
   lgd_list <- list()
   col_fun <- circlize::colorRamp2(breaks = score_break,
                                   colors = color_break)
   lgd_list[["effectsize"]] <- Legend(title = effect_name,
                                      at = score_break,
                                      col_fun = col_fun)
-  
+
   lfsr_tic_values <- c(0.2, 0.6, 1)
   lfsr_tic_labels <- c("> 0.25", "0.05 - 0.25", "0 - 0.05")
-  
-  lgd_list[["LFSR"]] <- 
+
+  lgd_list[["LFSR"]] <-
     Legend(title = lfsr_name,
            labels = lfsr_tic_labels,
            grid_height = unit(6, "mm"),
@@ -399,7 +399,7 @@ complexplot_gene_perturbation <- function(genes_df, interest_df,
              function(x, y, w, h) grid.circle(x, y, r = (lfsr_tic_values[3] + 0.2) * unit(2, "mm"),
                                               gp = gpar(fill = "black"))
            ))
-  
+
   marker_colormap <- structure(RColorBrewer::brewer.pal(length(levels(interest_df$type)), "Set3"),
                                names = levels(interest_df$type))
   lgd_list[["Marker"]] <-  Legend(title = "Marker annotation",
@@ -417,13 +417,13 @@ complexplot_gene_perturbation <- function(genes_df, interest_df,
                                ),
                                show_annotation_name = F,
                                show_legend = F)
-  
+
   map1 <- Heatmap(selected_effect_mat,
                   name = effect_name,
                   col = col_fun,
                   rect_gp = gpar(type = "none"),
                   cell_fun = function(j, i, x, y, width, height, fill) {
-                    grid.rect(x = x, y = y, width = width, height = height, 
+                    grid.rect(x = x, y = y, width = width, height = height,
                               gp = gpar(col = NA, fill = NA))
                     grid.circle(x = x, y = y,
                                 r = (binned_size_mat[i, j] + 0.2) * unit(2, "mm"),
@@ -457,7 +457,7 @@ plot_pairwise.corr_heatmap <- function(input_mat_1, input_mat_2 = NULL,
   }
   stopifnot(nrow(input_mat_1) == nrow(input_mat_2))
   corr_mat <- matrix(nrow = ncol(input_mat_1), ncol = ncol(input_mat_2))
-  
+
   for (i in 1:ncol(input_mat_1)){
     for (j in 1:ncol(input_mat_2)){
       vec_1 <- input_mat_1[, i]
@@ -471,7 +471,7 @@ plot_pairwise.corr_heatmap <- function(input_mat_1, input_mat_2 = NULL,
       }
     }
   }
-  
+
   if (is.null(colnames(input_mat_1))){
     rownames(corr_mat) <- 1:ncol(input_mat_1)
   } else {
@@ -482,7 +482,7 @@ plot_pairwise.corr_heatmap <- function(input_mat_1, input_mat_2 = NULL,
   } else {
     colnames(corr_mat) <- colnames(input_mat_2)
   }
-  
+
   if (corr_type == "pearson"){
     legend_name <- "Pearson Correlation"
     if (is.null(color_vec)){
@@ -492,7 +492,7 @@ plot_pairwise.corr_heatmap <- function(input_mat_1, input_mat_2 = NULL,
       colormap <- circlize::colorRamp2(breaks = c(-1, 0, 1),
                                        colors = color_vec)
     }
-    
+
   }
   if (corr_type == "jaccard" | corr_type == "prop_overlap"){
     legend_name <- ifelse(corr_type == "jaccard",
@@ -505,7 +505,7 @@ plot_pairwise.corr_heatmap <- function(input_mat_1, input_mat_2 = NULL,
                                        colors = color_vec)
     }
   }
-  
+
   ht <- Heatmap(corr_mat,
                 col = colormap,
                 name = legend_name,
@@ -519,7 +519,7 @@ plot_pairwise.corr_heatmap <- function(input_mat_1, input_mat_2 = NULL,
   }
 }
 
-source("/project2/xinhe/yifan/GTEx/scripts/qqplot_uniform.R")
+source("../R/qqplot_uniform.R")
 summ_pvalues <- function(pvalues, title_text = NULL){
   requireNamespace("gridExtra", quietly = TRUE)
   # distribution histogram
@@ -548,7 +548,7 @@ barplot_top_enrich_terms <- function(enrich_df, fdr_cutoff = 0.05, FC_cutoff = 2
     top_terms_df <- enrich_df %>% filter(description %in% terms_of_interest)
   }
   top_terms_df$description_short <- str_wrap(top_terms_df$description, width = str_wrap_length)
-  top_terms_df$description_short <- factor(top_terms_df$description_short, 
+  top_terms_df$description_short <- factor(top_terms_df$description_short,
                                      levels = top_terms_df$description_short)
   top_terms_df$pValue[top_terms_df$pValue < 10^(-pval_max)] <- 10^(-pval_max)
   top_terms_df$enrichmentRatio[top_terms_df$enrichmentRatio > FC_max] <- FC_max
